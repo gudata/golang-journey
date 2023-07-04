@@ -94,6 +94,12 @@ Choose the web framework
 
 capistrano ssh-something
 
+## Building the CV
+
+- Get the LinkedIn Skill badges for golang, github, microservices, linux.
+- write great introduction letter (optionally use chatgpt)
+- create a CV listing all projects
+
 ## Coursed to watch
 
 Linux course

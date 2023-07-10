@@ -174,7 +174,7 @@ File: .tool-versions
 
 #### Just - the new make
 
-Go and install the binary from here https://github.com/casey/just
+Go and install the binary from here https://github.com/casey/just | https://github.com/ggilmore/asdf-just
 
 Examples:
 

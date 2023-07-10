@@ -234,6 +234,7 @@ Install with asdf
 
 language syntax, structs, "inheritance", composition
 
+Great Course in [Bulgarian language](https://www.youtube.com/watch?v=z57WKerNe9w)
 #### Iterating
 
 Example for range

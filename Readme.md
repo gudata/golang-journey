@@ -87,6 +87,9 @@ For Ubuntu you will probably need those packages
   - https://github.com/denysdovhan/bash-handbook
   - https://github.com/dylanaraps/pure-bash-bible
 
+Get a fancy prompt with a lot of information https://starship.rs/ 
+
+
 ### Tools
 
 #### asdf

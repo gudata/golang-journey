@@ -93,10 +93,10 @@ For Ubuntu you will probably need those packages
 
 Install the manager
 
-  apt install curl git
-  git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
-  . $HOME/.asdf/asdf.sh
-  . $HOME/.asdf/completions/asdf.bash
+      apt install curl git
+      git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
+      . $HOME/.asdf/asdf.sh
+      . $HOME/.asdf/completions/asdf.bash
 
 List of plugins
 

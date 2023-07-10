@@ -66,7 +66,7 @@ For Ubuntu you will probably need those packages
 - [ ] Install VSCode
 - [ ] Extensions
   - [ ] golang
-  - [ ] github
+  - [ ] github - GitLens
   - [ ] https://marketplace.visualstudio.com/items?itemName=cweijan.vscode-mysql-client2
 
 ### Git

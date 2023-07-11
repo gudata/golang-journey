@@ -23,8 +23,6 @@
       - [Interfaces](#interfaces)
       - [Working with json \& files](#working-with-json--files)
     - [Golang Concurency](#golang-concurency)
-      - [Simple](#simple)
-      - [Practical Concurency](#practical-concurency)
     - [Know your options](#know-your-options)
     - [Databases](#databases)
   - [Web development](#web-development)
@@ -71,7 +69,7 @@ For Ubuntu you will probably need those packages
 - [ ] Install VSCode
 - [ ] Extensions
   - [ ] golang
-  - [ ] github
+  - [ ] github - GitLens
   - [ ] https://marketplace.visualstudio.com/items?itemName=cweijan.vscode-mysql-client2
 
 ### Git
@@ -92,16 +90,19 @@ For Ubuntu you will probably need those packages
   - https://github.com/denysdovhan/bash-handbook
   - https://github.com/dylanaraps/pure-bash-bible
 
+Get a fancy prompt with a lot of information https://starship.rs/ 
+
+
 ### Tools
 
 #### asdf
 
 Install the manager
 
-  apt install curl git
-  git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
-  . $HOME/.asdf/asdf.sh
-  . $HOME/.asdf/completions/asdf.bash
+      apt install curl git
+      git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
+      . $HOME/.asdf/asdf.sh
+      . $HOME/.asdf/completions/asdf.bash
 
 List of plugins
 
@@ -176,7 +177,7 @@ File: .tool-versions
 
 #### Just - the new make
 
-Go and install the binary from here https://github.com/casey/just
+Go and install the binary from here https://github.com/casey/just | https://github.com/ggilmore/asdf-just
 
 Examples:
 
@@ -236,8 +237,8 @@ Install with asdf
 
 language syntax, structs, "inheritance", composition
 
-#### Ranges and Slices
-Tasks:
+Great Course in [Bulgarian language](https://www.youtube.com/watch?v=z57WKerNe9w)
+#### Iterating
 
 Create a function called "removeDuplicates" that takes a slice of integers as input and returns a new slice with duplicate values removed. The order of the elements in the resulting slice should be maintained.
 

@@ -436,6 +436,7 @@ capistrano ssh-something
 - write great introduction letter (optionally use chatgpt)
 - create a CV listing all projects
 
-## Coursed to watch
-
+## Coursed to watch & Books to Read
+Easy to read: Head First Design Patterns or the original "Design Patterns: Elements of Reusable Object-Oriented"
 Linux course
+[Learn Projects by example](https://github.com/practical-tutorials/project-based-learning#go)

@@ -439,4 +439,5 @@ capistrano ssh-something
 ## Coursed to watch & Books to Read
 Easy to read: Head First Design Patterns or the original "Design Patterns: Elements of Reusable Object-Oriented"
 Linux course
+
 [Learn Projects by example](https://github.com/practical-tutorials/project-based-learning#go)

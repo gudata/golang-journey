@@ -459,6 +459,9 @@ Try godog
 
 https://semaphoreci.com/community/tutorials/how-to-use-godog-for-behavior-driven-development-in-go
 
+Make it working in Github Actions - your CI/CD server.
+
+From now on, put your projects in CI/CD
 
 ### Containers
 

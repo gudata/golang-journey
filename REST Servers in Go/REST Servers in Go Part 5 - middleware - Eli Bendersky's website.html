@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:og="http://ogp.me/ns#" xmlns:fb="https://www.facebook.com/2008/fbml"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>REST Servers in Go: Part 5 - middleware - Eli Bendersky's website</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://eli.thegreenplace.net/favicon.ico" rel="icon">
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.css" type="text/css">
+    <link href="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/font-awesome.min.css" rel="stylesheet">
+
+    <link href="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/vs.css" rel="stylesheet">
+    <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/style.css" type="text/css">
+
+        <link href="https://eli.thegreenplace.net/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Eli Bendersky's website ATOM Feed">
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://eli.thegreenplace.net/" class="navbar-brand">
+                <img src="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/logosmall.png" width="32" height="32">
+Eli Bendersky's website            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="https://eli.thegreenplace.net/pages/about">
+                        <i class="fa fa-question"></i>
+                        <span class="icon-label">About</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://eli.thegreenplace.net/archives/all">
+                        <i class="fa fa-th-list"></i>
+                        <span class="icon-label">Archives</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+
+<div class="container">
+    <div class="row">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/" rel="bookmark" title="Permalink to REST Servers in Go: Part 5 - middleware">
+                        REST Servers in Go: Part 5 - middleware
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="published">
+        <i class="fa fa-calendar"></i>
+        <time> March 06, 2021 at 19:21</time>
+    </span>
+<span class="label label-default">Tags</span>
+    <a href="https://eli.thegreenplace.net/tag/go">Go</a>
+        ,
+    <a href="https://eli.thegreenplace.net/tag/network-programming">Network Programming</a>
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>This is the fifth post in a series about writing REST servers in Go. Here is a
+list of posts in the series:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">Part 1 - standard library</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">Part 2 - using a router package</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/">Part 3 - using a web framework</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/">Part 4 - using OpenAPI and Swagger</a></li>
+<li>Part 5 - middleware (this post)</li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/">Part 6 - authentication</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/">Part 7 - GraphQL</a></li>
+</ul>
+<p>In this part we're going to talk about <em>middleware</em>. In an earlier post on the
+<a class="reference external" href="https://eli.thegreenplace.net/2021/life-of-an-http-request-in-a-go-server/">Life of an HTTP request in a Go server</a>,
+I've described the basic mechanics of how middleware works in Go. It's an
+important pre-requisite; please read it, if you haven't yet.</p>
+<div class="section" id="basic-middleware-for-our-task-server">
+<h2>Basic middleware for our task server</h2>
+<p>It's time to revisit our task server once again! The following example is based
+on the basic stdlib-only task server developed in <a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">part 1</a>.
+We'll talk about adding middleware to the server and the different options we
+have for integrating it with the rest of the code. The complete code for the
+task server discussed below <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/stdlib-middleware">is available here</a>.</p>
+<p>Our original task server had a <tt class="docutils literal">log.Printf</tt> call at the beginning of every
+handler to log the request being handled. This is something middleware can do
+with less code duplication. Here's a simple logging middleware:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">Logging</span><span class="p">(</span><span class="nx">next</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="p">)</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">start</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span><span class="w"></span>
+<span class="w">    </span><span class="nx">next</span><span class="p">.</span><span class="nx">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">"%s %s %s"</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">RequestURI</span><span class="p">,</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span><span class="w"></span>
+<span class="w">  </span><span class="p">})</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>In addition to logging the request method and URI, this middleware calculates
+how long the handler took to complete its work and logs that as well.</p>
+<p>To connect this middleware to our handlers, here's how <tt class="docutils literal">main</tt> would look:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">taskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/tag/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">handler</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">middleware</span><span class="p">.</span><span class="nx">Logging</span><span class="p">(</span><span class="nx">mux</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">"localhost:"</span><span class="o">+</span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SERVERPORT"</span><span class="p">),</span><span class="w"> </span><span class="nx">handler</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Here the middleware is installed <em>globally</em>, affecting all handlers. Middleware
+could also be easily installed on a per-route basis; for example, if we only
+wanted logging to happen on <tt class="docutils literal">server.tagHandler</tt>, we could do <a class="footnote-reference" href="#footnote-1" id="footnote-reference-1">[1]</a>:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">taskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/tag/"</span><span class="p">,</span><span class="w"> </span><span class="nx">middleware</span><span class="p">.</span><span class="nx">Logging</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">)))</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">"localhost:"</span><span class="o">+</span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SERVERPORT"</span><span class="p">),</span><span class="w"> </span><span class="nx">mux</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>It's also possible to mix and match: some middleware could be per-route, while
+other middleware could be global. Note that there's a difference in the order
+the middleware is executed relative to the mux in the two examples above;
+can you spot it?</p>
+<p>In the first example, the order is:</p>
+<div class="highlight"><pre><span></span>request --&gt; [Logging] --&gt; [Mux] --&gt; [Handler]
+</pre></div>
+<p>While in the second example, for <tt class="docutils literal">/tag/</tt> it's:</p>
+<div class="highlight"><pre><span></span>request --&gt; [Mux] --&gt; [Logging] --&gt; [tagHandler]
+</pre></div>
+<p>Generally, it's a good idea to keep track of the order our middleware is
+executed in. In this case the order between the logging middleware and the mux
+doesn't matter too much, but in some cases order could be important.</p>
+</div>
+<div class="section" id="adding-more-middleware">
+<h2>Adding more middleware</h2>
+<p>Let's add some more middleware to our server. In
+<a class="reference external" href="https://eli.thegreenplace.net/2021/life-of-an-http-request-in-a-go-server/">Life of an HTTP request in a Go server</a>,
+I mentioned how <tt class="docutils literal">net/http</tt> recovers from panics in handlers by closing the
+client's connection and logging the error. If we want to do something different,
+we have to write our own middleware; let's give it a try:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">PanicRecovery</span><span class="p">(</span><span class="nx">next</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="p">)</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">defer</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nb">recover</span><span class="p">();</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusText</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusInternalServerError</span><span class="p">),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusInternalServerError</span><span class="p">)</span><span class="w"></span>
+<span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">debug</span><span class="p">.</span><span class="nx">Stack</span><span class="p">()))</span><span class="w"></span>
+<span class="w">      </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="p">}()</span><span class="w"></span>
+<span class="w">    </span><span class="nx">next</span><span class="p">.</span><span class="nx">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">})</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>This middleware attaches a <tt class="docutils literal">defer</tt> to a handler; the deferred code recovers
+from a panic and writes an <em>internal error</em> (HTTP status 500) response back to
+the client, while logging the panic's stack trace.</p>
+<p>And here's <tt class="docutils literal">main</tt> again, with the middleware chain set up:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">taskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/tag/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">handler</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">middleware</span><span class="p">.</span><span class="nx">Logging</span><span class="p">(</span><span class="nx">mux</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">handler</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">middleware</span><span class="p">.</span><span class="nx">PanicRecovery</span><span class="p">(</span><span class="nx">handler</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">"localhost:"</span><span class="o">+</span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SERVERPORT"</span><span class="p">),</span><span class="w"> </span><span class="nx">handler</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>The middleware execution order is now:</p>
+<div class="highlight"><pre><span></span>request --&gt; [Panic Recovery] --&gt; [Logging] --&gt; [Mux] --&gt; [tagHandler]
+</pre></div>
+<p>As before, it's easy to mix and match; we could set <tt class="docutils literal">PanicRecovery</tt> only on
+some of routes, for example, while setting <tt class="docutils literal">Logging</tt> on all the routes.</p>
+</div>
+<div class="section" id="creating-middleware-chains">
+<h2>Creating middleware chains</h2>
+<p>As we've just seen, when adding middleware to a server we have to be aware of
+the order of execution; this is true for both global and per-route middleware.
+It's not surprising, then, that several packages popped up to help us define
+middleware "chains" in a slightly more ergonomic manner. Such packages also
+typically let us reuse chains between different routes. An example
+of such a package is <a class="reference external" href="https://github.com/justinas/alice">alice</a>.</p>
+<p>As usual, a word of caution about dependencies: unless you're in a real
+hurry and don't care much about long-term readability and maintenance of the
+code, be very careful in heaping additional dependencies on your project.
+Especially if the <a class="reference external" href="https://eli.thegreenplace.net/2017/benefits-of-dependencies-in-software-projects-as-a-function-of-effort/">benefits they bring</a>
+are small. If something like <em>alice</em> feels much more natural to you - go for it.
+Otherwise, start with writing your custom code (just like in our example) and
+consider switching later if the need arises.</p>
+<p>In any case, if you're using a router package like <tt class="docutils literal">gorilla/mux</tt> or a
+full-fledged framework like Gin, these have their own tools for setting up
+middleware.</p>
+</div>
+<div class="section" id="middleware-with-gorilla-mux">
+<h2>Middleware with gorilla/mux</h2>
+<p>When using the <tt class="docutils literal">gorilla/mux</tt> router package, we get some support for
+middleware included. The <tt class="docutils literal">mux.Router</tt> type has a <tt class="docutils literal"><span class="pre">Use(...)</span></tt> method which can
+be used to easily set up global middleware chains. Moreover, the
+<tt class="docutils literal">gorilla/handlers</tt> package includes some ready-made middleware handlers <a class="footnote-reference" href="#footnote-2" id="footnote-reference-2">[2]</a>.
+For example, a panic-recovery and a logging middleware are already included,
+along with a few others.</p>
+<p>Here's a concrete code sample (<a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/gorilla-middleware">the full server is available here</a>):</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">mux</span><span class="p">.</span><span class="nx">NewRouter</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">StrictSlash</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">createTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"POST"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getAllTasksHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteAllTasksHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"DELETE"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/{id:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/{id:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"DELETE"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/tag/{tag}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/{year:[0-9]+}/{month:[0-9]+}/{day:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// Set up logging and panic recovery middleware.</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Use</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="p">)</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">handlers</span><span class="p">.</span><span class="nx">LoggingHandler</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">,</span><span class="w"> </span><span class="nx">h</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">})</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Use</span><span class="p">(</span><span class="nx">handlers</span><span class="p">.</span><span class="nx">RecoveryHandler</span><span class="p">(</span><span class="nx">handlers</span><span class="p">.</span><span class="nx">PrintRecoveryStack</span><span class="p">(</span><span class="kc">true</span><span class="p">)))</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">"localhost:"</span><span class="o">+</span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SERVERPORT"</span><span class="p">),</span><span class="w"> </span><span class="nx">router</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>The <tt class="docutils literal">main</tt> function is very similar to the original server using
+<tt class="docutils literal">gorilla/mux</tt> in <a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">part 2</a>,
+with the addition of two <tt class="docutils literal">router.Use</tt> calls where we set up the middleware. I
+made separate <tt class="docutils literal">Use</tt> calls for clarity, though <tt class="docutils literal">Use</tt> can accept an arbitrary
+number of handlers to chain one after another.</p>
+<p>The panic recovery middleware is straightforward to use, and demonstrates an
+interesting technique for configuring middleware using <em>functional
+options</em>. In this case we're configuring it to log the stack when a
+panic is recovered (the default is <tt class="docutils literal">false</tt>).</p>
+<p>The <tt class="docutils literal">handlers.LoggingHandler</tt> middleware's API is a bit funky and we need a
+small adapter function to hook it into <tt class="docutils literal">router.Use</tt>. It's not clear why it
+was designed this way; IMHO passing an <tt class="docutils literal">io.Writer</tt> could have been
+accomplished using a functional option similarly to <tt class="docutils literal">RecoveryHandler</tt>.</p>
+<p>This example demonstrates how to set up <em>global</em> middleware (affecting the whole
+router); how can we set up per-route middleware with <tt class="docutils literal">gorilla/mux</tt>?</p>
+<p>One way would be exactly similar to what we did with the standard-library option
+in the previous example. An alternative is to use <tt class="docutils literal">gorilla/mux</tt> <em>subrouters</em>
+with <tt class="docutils literal">Use</tt>. I found the second method slightly convoluted if all you need is
+to add some middleware to a single path, but if your routing is already
+factored into several subrouters, the incremental addition may be trivial.</p>
+</div>
+<div class="section" id="middleware-with-gin">
+<h2>Middleware with gin</h2>
+<p>Let's now revisit our Gin-based task server from <a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/">part 3</a>.
+As specified in that post, when we create a new Gin instance with
+<tt class="docutils literal">gin.Default()</tt>, some default middleware is already registered - specifically
+logging and panic recovery.</p>
+<p>We can also achieve the same effect less automatically by instantiating
+<tt class="docutils literal">gin.New</tt> (which adds no middleware) and then adding middleware manually:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="c1">// Set up middleware for logging and panic recovery explicitly.</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">gin</span><span class="p">.</span><span class="nx">New</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Use</span><span class="p">(</span><span class="nx">gin</span><span class="p">.</span><span class="nx">Logger</span><span class="p">())</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Use</span><span class="p">(</span><span class="nx">gin</span><span class="p">.</span><span class="nx">Recovery</span><span class="p">())</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">POST</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">createTaskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getAllTasksHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">DELETE</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteAllTasksHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/task/:id"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getTaskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">DELETE</span><span class="p">(</span><span class="s">"/task/:id"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteTaskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/tag/:tag"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/due/:year/:month/:day"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Run</span><span class="p">(</span><span class="s">"localhost:"</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SERVERPORT"</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Gin's <tt class="docutils literal">Use</tt> method lets us attach a middleware <em>chain</em> to the router <a class="footnote-reference" href="#footnote-3" id="footnote-reference-3">[3]</a>.
+Just like Gin's handlers, Gin middleware does not have the standard middleware
+signature; instead, it's defined in package <tt class="docutils literal">gin</tt> as:</p>
+<div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">HandlerFunc</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="o">*</span><span class="nx">Context</span><span class="p">)</span><span class="w"></span>
+</pre></div>
+<p>So we'd need an adapter to attach a standard-signature middleware to Gin.</p>
+<p>If you're using gin, the <a class="reference external" href="https://github.com/gin-contrib/">gin-contrib</a> GitHub
+organization has a large collection of middleware modules you could reuse for
+your application.</p>
+</div>
+<div class="section" id="other-uses-of-middleware">
+<h2>Other uses of middleware</h2>
+<p>The middleware pattern is versatile and is being widely used in REST servers for
+a variety of tasks. In this post's examples, I've only shown some basic logging
+and panic recovery middleware since I wanted to focus on the <em>mechanism</em> rather
+than on a wide survey of the use cases.</p>
+<p>In the wild, you'll find middleware for standardized checking of requests, CORS,
+many variants of logging, compression, sessions, tracing, caching, encryption
+and authentication. I'll be covering authentication in much more detail in a
+future post in this series.</p>
+</div>
+<div class="section" id="closing-words">
+<h2>Closing words</h2>
+<p>This post covered the <em>middleware</em> pattern in detail, focusing on how to
+integrate it into REST servers with custom stdlib-only code, <tt class="docutils literal">gorilla/mux</tt>
+routing and a full-fledged framework like Gin. My hope is that after reading it,
+you'll be able to understand how middleware works and how to use it in your
+own projects.</p>
+<p>A word of caution: middleware is not all sparkles and rainbows. As with any
+pattern, it should not be overused. Middleware complicates
+the flow of a request through the server, making code reading and debugging more
+challenging. I'd strongly recommend defining all your middleware in a single
+place and avoid layers of abstraction where middleware gets tacked onto routes
+dynamically, conditionally, or within other middleware. Your future debugging
+self will be thankful.</p>
+<hr class="docutils">
+<table class="docutils footnote" frame="void" id="footnote-1" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-1">[1]</a></td><td>Note that we have to call <tt class="docutils literal">mux.Handle</tt> instead of <tt class="docutils literal">mux.HandleFunc</tt> in
+this case, because our middleware functions return an <tt class="docutils literal">http.Handler</tt>,
+not an <tt class="docutils literal">http.HandlerFunc</tt>. For a similar (but inverse) reason, when
+passing our handler into the middleware we have to adapt it with
+<tt class="docutils literal">http.HandlerFunc</tt>.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="footnote-2" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-2">[2]</a></td><td>Custom-written middleware like our code earlier in this post is also easy
+to use with <tt class="docutils literal">gorilla/mux</tt>, due to the standard interfaces <tt class="docutils literal">net/http</tt>
+uses for handlers.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="footnote-3" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-3">[3]</a></td><td>Per-path middleware in Gin is easily accomplished by using <em>router
+groups</em>; each group can have its own middleware registered.</td></tr>
+</tbody>
+</table>
+</div>
+
+            </div>
+            <!-- /.entry-content -->
+<hr>
+<div class="dotted-links">
+<p class="align-center">
+For comments, please send me
+<a href="mailto:eliben@gmail.com"><i class="fa fa-envelope-o"></i> an email</a>.
+</p>
+</div>        </article>
+    </section>
+
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">
+            © 2003-2023 Eli Bendersky
+         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/jquery-2.2.4.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.js"></script>
+
+<!--
+  Using goatcounter to count visitors. The count.js script is vendored in.
+-->
+<script data-goatcounter="https://stats.thegreenplace.net/count" async="" src="REST%20Servers%20in%20Go%20Part%205%20-%20middleware%20-%20Eli%20Bendersky's%20website_files/count.js"></script>
+
+</body></html>

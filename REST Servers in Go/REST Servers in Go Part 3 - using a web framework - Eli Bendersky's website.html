@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:og="http://ogp.me/ns#" xmlns:fb="https://www.facebook.com/2008/fbml"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>REST Servers in Go: Part 3 - using a web framework - Eli Bendersky's website</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://eli.thegreenplace.net/favicon.ico" rel="icon">
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.css" type="text/css">
+    <link href="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/font-awesome.min.css" rel="stylesheet">
+
+    <link href="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/vs.css" rel="stylesheet">
+    <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/style.css" type="text/css">
+
+        <link href="https://eli.thegreenplace.net/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Eli Bendersky's website ATOM Feed">
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://eli.thegreenplace.net/" class="navbar-brand">
+                <img src="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/logosmall.png" width="32" height="32">
+Eli Bendersky's website            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="https://eli.thegreenplace.net/pages/about">
+                        <i class="fa fa-question"></i>
+                        <span class="icon-label">About</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://eli.thegreenplace.net/archives/all">
+                        <i class="fa fa-th-list"></i>
+                        <span class="icon-label">Archives</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+
+<div class="container">
+    <div class="row">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/" rel="bookmark" title="Permalink to REST Servers in Go: Part 3 - using a web framework">
+                        REST Servers in Go: Part 3 - using a web framework
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="published">
+        <i class="fa fa-calendar"></i>
+        <time> January 23, 2021 at 06:12</time>
+    </span>
+<span class="label label-default">Tags</span>
+    <a href="https://eli.thegreenplace.net/tag/go">Go</a>
+        ,
+    <a href="https://eli.thegreenplace.net/tag/network-programming">Network Programming</a>
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>This is the third post in a series about writing REST servers in Go. Here is a
+list of posts in the series:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">Part 1 - standard library</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">Part 2 - using a router package</a></li>
+<li>Part 3 - using a web framework (this post)</li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/">Part 4 - using OpenAPI and Swagger</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/">Part 5 - middleware</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/">Part 6 - authentication</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/">Part 7 - GraphQL</a></li>
+</ul>
+<p>In this part we're going to re-implement our REST server using one of the most
+popular web frameworks in Go - <a class="reference external" href="https://github.com/gin-gonic/gin">Gin</a>. The
+full code for this part is <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/gin">available here</a>.</p>
+<div class="section" id="selecting-a-web-framework">
+<h2>Selecting a web framework</h2>
+<p>Go has several popular web frameworks these days, and I'm sure they all have
+their merits. My goal is not to engage in a lengthy comparison and discussion
+of these frameworks; rather, I'm interested in examining how code using a
+framework compares to code that doesn't.</p>
+<p>I picked Gin because it's one of the most popular projects (judging by GitHub
+star counts), and it seems minimal and easy to pick up and use. Gin's
+documentation leaves much to be desired, but the framework is so intuitive that
+I found it pretty easy to pick up regardless <a class="footnote-reference" href="#footnote-1" id="footnote-reference-1">[1]</a>.</p>
+<p>What's nice about Gin is that it doesn't force any particular style of
+application development on you (e.g. MVC). Using Gin almost feels like writing
+code <em>without</em> a framework, except that you get a lot of tools and goodies to
+achieve your goals with less code.</p>
+</div>
+<div class="section" id="routing-with-gin">
+<h2>Routing with Gin</h2>
+<p>Our <tt class="docutils literal">main</tt> function sets up a new Gin router and registers the routes:</p>
+<div class="highlight"><pre><span></span><span class="nx">router</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">gin</span><span class="p">.</span><span class="nx">Default</span><span class="p">()</span><span class="w"></span>
+<span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">POST</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">createTaskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getAllTasksHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">DELETE</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteAllTasksHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/task/:id"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getTaskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">DELETE</span><span class="p">(</span><span class="s">"/task/:id"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteTaskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/tag/:tag"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">GET</span><span class="p">(</span><span class="s">"/due/:year/:month/:day"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">)</span><span class="w"></span>
+</pre></div>
+<p>The call to <tt class="docutils literal">gin.Default()</tt> returns a default <em>engine</em>, which is Gin's main
+type that acts as a router and provides other functionality. Specifically,
+<tt class="docutils literal">Default</tt> only registers the basic middleware for crash recovery and logging.
+More on middleware later.</p>
+<p>The route registration should look familiar by now. It's slightly similar to the
+<a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">gorilla version</a>,
+with some slight differences:</p>
+<ol class="arabic simple">
+<li>Instead of selecting the HTTP method as an additional (Go) method call on
+the route, it's encoded in the name of the registration. E.g. <tt class="docutils literal">router.POST</tt>
+instead of <tt class="docutils literal"><span class="pre">router.HandleFunc(...).Methods("POST")</span></tt>.</li>
+<li>While Gorilla supports regexp matching in the routes, Gin doesn't. This is
+a limitation that we'll come back to later.</li>
+</ol>
+</div>
+<div class="section" id="handlers">
+<h2>Handlers</h2>
+<p>Let's take a look at some handlers with Gin. Starting from the simplest ones,
+here's <tt class="docutils literal">getAllTasksHandler</tt>:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="p">)</span><span class="w"> </span><span class="nx">getAllTasksHandler</span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">gin</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">allTasks</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ts</span><span class="p">.</span><span class="nx">store</span><span class="p">.</span><span class="nx">GetAllTasks</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">c</span><span class="p">.</span><span class="nx">JSON</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span><span class="p">,</span><span class="w"> </span><span class="nx">allTasks</span><span class="p">)</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>There are a few interesting things to note here:</p>
+<ol class="arabic simple">
+<li>Handlers with Gin don't have the standard Go HTTP handler signature; instead,
+they simply take a <tt class="docutils literal">gin.Context</tt>, which can be used to analyze the request
+and construct the response. Gin does have ways to interact with standard
+handlers, by means of the <tt class="docutils literal">gin.WrapF</tt> and <tt class="docutils literal">gin.WrapH</tt> helper functions.</li>
+<li>In contrast with the earlier versions of our server, there's no need to
+manually log each request because Gin's default logging middleware already
+does this (with all kinds of cool doodads like terminal colors and reporting
+the processing time of each request).</li>
+<li>We also don't have to implement the <tt class="docutils literal">renderJSON</tt> helper any more, since Gin
+has its own <tt class="docutils literal">Context.JSON</tt> to render JSON as the response.</li>
+</ol>
+<p>Now let's examine a slightly more sophisticated handler that has parameters:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="p">)</span><span class="w"> </span><span class="nx">getTaskHandler</span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">gin</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strconv</span><span class="p">.</span><span class="nx">Atoi</span><span class="p">(</span><span class="nx">c</span><span class="p">.</span><span class="nx">Params</span><span class="p">.</span><span class="nx">ByName</span><span class="p">(</span><span class="s">"id"</span><span class="p">))</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">c</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusBadRequest</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">())</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">task</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ts</span><span class="p">.</span><span class="nx">store</span><span class="p">.</span><span class="nx">GetTask</span><span class="p">(</span><span class="nx">id</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">c</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusNotFound</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">())</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">c</span><span class="p">.</span><span class="nx">JSON</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span><span class="p">,</span><span class="w"> </span><span class="nx">task</span><span class="p">)</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>The interesting part to note here is the parameter handling. Gin provides access
+to route parameters (the parts of the route starting with a colon, like <tt class="docutils literal">:id</tt>)
+through <tt class="docutils literal">Context.Params</tt>.</p>
+<p>Unlike Gorilla, however, Gin doesn't support regexps in its routes (I believe
+this is due to performance concerns, since Gin prides itself on fast routing).
+Therefore, we have to handle the integer parsing of the <tt class="docutils literal">id</tt> parameter.</p>
+</div>
+<div class="section" id="bindings">
+<h2>Bindings</h2>
+<p>The final handler we're going to examine in detail is <tt class="docutils literal">createTaskHandler</tt>; it
+handles a request that carries non-trivial data, so it's an interesting case
+study:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="p">)</span><span class="w"> </span><span class="nx">createTaskHandler</span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">gin</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="kd">type</span><span class="w"> </span><span class="nx">RequestTask</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">Text</span><span class="w"> </span><span class="kt">string</span><span class="w">    </span><span class="s">`json:"text"`</span><span class="w"></span>
+<span class="w">    </span><span class="nx">Tags</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w">  </span><span class="s">`json:"tags"`</span><span class="w"></span>
+<span class="w">    </span><span class="nx">Due</span><span class="w">  </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="s">`json:"due"`</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="nx">rt</span><span class="w"> </span><span class="nx">RequestTask</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">c</span><span class="p">.</span><span class="nx">ShouldBindJSON</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">rt</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">c</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusBadRequest</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">())</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">id</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ts</span><span class="p">.</span><span class="nx">store</span><span class="p">.</span><span class="nx">CreateTask</span><span class="p">(</span><span class="nx">rt</span><span class="p">.</span><span class="nx">Text</span><span class="p">,</span><span class="w"> </span><span class="nx">rt</span><span class="p">.</span><span class="nx">Tags</span><span class="p">,</span><span class="w"> </span><span class="nx">rt</span><span class="p">.</span><span class="nx">Due</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">c</span><span class="p">.</span><span class="nx">JSON</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span><span class="p">,</span><span class="w"> </span><span class="nx">gin</span><span class="p">.</span><span class="nx">H</span><span class="p">{</span><span class="s">"Id"</span><span class="p">:</span><span class="w"> </span><span class="nx">id</span><span class="p">})</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Gin has significant infrastructure for <em>binding</em> requests to Go data. Binding
+in this context means parsing the contents of requests (which could be in JSON,
+YAML or other formats), validating them and assigning their values to Go
+structs. Here we use a very rudimentary form of binding for our <tt class="docutils literal">RequestTask</tt>
+without any validation, but it's worth checking out the more advanced options
+Gin offers.</p>
+<p>You'll notice that the Gin version of <tt class="docutils literal">createTaskHandler</tt> is quite a bit
+shorter than our earlier versions because of the work <tt class="docutils literal">ShouldBindJSON</tt> is
+doing for parsing JSON from the request.</p>
+<p>An additional thing to note is that we don't need a one-shot <tt class="docutils literal">struct</tt> for
+the response ID now. Instead we use <tt class="docutils literal">gin.H</tt>, which is just an alias for
+<tt class="docutils literal">map[string]interface{}</tt>; so simple, and yet very effective to construct
+responses with minimal typing and syntax.</p>
+</div>
+<div class="section" id="additional-features-of-gin">
+<h2>Additional features of Gin</h2>
+<p>In this example we've only examined a small sliver of what Gin offers to web
+application developers. Gin comes with many additional features pre-packaged,
+like commonly used middleware, authentication and helpers for rendering HTML
+templates. Neither of these are hard to implement without a framework, but using
+Gin will certainly make it quicker and with far less code, at least for the
+simple cases.</p>
+<p>Right now the focus is only on the basics of routing requests and
+parsing/responding with JSON, but I'll return to some of these topics in future
+parts of this series.</p>
+</div>
+<div class="section" id="limitations">
+<h2>Limitations</h2>
+<p>The flip side of the convenience of web frameworks is the limitations and
+stylistic mismatches one may experience when using them. We already ran into
+one limitation in our simple example - lack of regexp support in Gin routes,
+which means that nontrivial route matching requires more code to parse and
+validate.</p>
+<p>Any package and tool may have limitations, but <em>frameworks</em> make limitations
+more significant by their very pervasiveness.</p>
+<p>Imagine we'd discover a limitation in Gorilla's <tt class="docutils literal">mux</tt> which would be a blocker
+for our app. We could then replace it by another router package! While there
+would undoubtedly be some cost to the transition, its effects would be localized
+- only the routing configuration is affected.</p>
+<p>In contrast, imagine we have a large web app written with Gin and we suddenly
+discover that the no-regexp limitation is critical <a class="footnote-reference" href="#footnote-2" id="footnote-reference-2">[2]</a>. We can't just easily
+replace Gin by another framework since our whole application is built upon it.
+The change cost is much higher.</p>
+<p>None of this is fatal; my goal is not to persuade or dissuade folks from using
+web frameworks. I'm trying to present the objective reality and describe some
+of the real-life challenges programmers run into when using these packages
+and frameworks.</p>
+<hr class="docutils">
+<table class="docutils footnote" frame="void" id="footnote-1" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-1">[1]</a></td><td>A slightly philosophical detour: well designed and minimal frameworks
+have the privilege of being easy to use even without top-notch docs.
+Contrast this to the more complex frameworks (looking at you,
+<a class="reference external" href="https://beego.me/">BeeGo</a>), which also have sub-par documentation
+and are convoluted and over-abstracted at the same time. Such frameworks
+really raise the barrier of entry by not investing sufficiently in great
+documentation.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="footnote-2" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-2">[2]</a></td><td>This is fairly unlikely, but serves as a good example regardless.</td></tr>
+</tbody>
+</table>
+</div>
+
+            </div>
+            <!-- /.entry-content -->
+<hr>
+<div class="dotted-links">
+<p class="align-center">
+For comments, please send me
+<a href="mailto:eliben@gmail.com"><i class="fa fa-envelope-o"></i> an email</a>.
+</p>
+</div>        </article>
+    </section>
+
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">
+            © 2003-2023 Eli Bendersky
+         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/jquery-2.2.4.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.js"></script>
+
+<!--
+  Using goatcounter to count visitors. The count.js script is vendored in.
+-->
+<script data-goatcounter="https://stats.thegreenplace.net/count" async="" src="REST%20Servers%20in%20Go%20Part%203%20-%20using%20a%20web%20framework%20-%20Eli%20Bendersky's%20website_files/count.js"></script>
+
+</body></html>

@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.97.3">
+
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Ivan Kuznetsov">
+  <meta property="og:url" content="https://jeiwan.net/posts/building-blockchain-in-go-part-7/">
+
+  <title>Building Blockchain in Go. Part 7: Network - Going the distance</title>
+  <meta property="og:title" content="Building Blockchain in Go. Part 7: Network - Going the distance">
+  <meta property="og:type" content="article">
+  <meta name="description" content="A blog about blockchains and smart contracts development">
+  <meta name="keywords" content="bitcoin, ethereum, evm, smart contract, blockchain, programming, development, solidity, vyper">
+
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%207%20Network%20-%20Going%20the%20distance_files/css.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%207%20Network%20-%20Going%20the%20distance_files/prism.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%207%20Network%20-%20Going%20the%20distance_files/journal.css">
+  <link href="https://jeiwan.net/index.xml" rel="alternate" type="application/rss+xml" title="Going the distance">
+
+  
+
+  
+
+</head>
+
+<body>
+  <div class="container">
+
+    <nav class="site-nav">
+      <a href="https://jeiwan.net/">Index</a>
+    </nav>
+
+
+<article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Building Blockchain in Go. Part 7: Network</h1>
+    <time class="post-date" datetime=" 2017-10-06 12:31:19 +07">06 Oct 2017</time>
+  </header>
+
+  <blockquote>
+<p>Chinese translations: <a href="https://github.com/liuchengxu/blockchain-tutorial/blob/master/content/part-7/network.md">by liuchengxu</a>, <a href="https://zhangli1.gitbooks.io/dummies-for-blockchain/content/">by zhangli1</a></p>
+</blockquote>
+<h2 id="introduction">Introduction</h2>
+<p>So far, we’ve build a blockchain that has all key features: 
+anonymous, secure, and randomly generated addresses; blockchain data 
+storage; Proof-of-Work system; reliable way to store transactions. While
+ these features are crucial, it’s not enough. What makes these features 
+really shine, and what make cryptocurrencies possible, is network. 
+What’s the use of having such blockchain implementation running just on a
+ single computer? What’s the use of those cryptography based features, 
+when there’s just one user? It’s network that make all these mechanism 
+work and be useful.</p>
+<p>You can think of those blockchain features as rules, similar to the 
+rules that people establish when they want to live and thrive together. A
+ kind of social arrangements. Blockchain network is a community of 
+programs that follow the same rules, and it’s this following the rules 
+that makes the network alive. Similarly, when people share identical 
+ideas, they become stronger and can together build a better life. If 
+there are people that follow a different set of rules, they’ll live in a
+ separate society (state, commune, etc.). Identically, if there’re 
+blockchain nodes that follow different rules, they’ll form a separate 
+network.</p>
+<p><strong>This is very important:</strong> without a network and without a majority of nodes sharing identical rules, these rules are useless!</p>
+<blockquote>
+<p>DISCLAIMER: Unfortunately, I didn’t have enough time to implement a 
+real P2P network prototype. In this article I’ll demonstrate a most 
+common scenario, that involves nodes of different types. Improving this 
+scenario and making this a P2P network can be a good challenge and 
+practice for you!
+Also I cannot guarantee that other scenarios besides the one implemented
+ in this article, will work. Sorry!</p>
+</blockquote>
+<blockquote>
+<p>This part introduces significant code changes, so it makes no sense explaining all of them here. Please refer to <a href="https://github.com/Jeiwan/blockchain_go/compare/part_6...part_7#files_bucket">this page</a> to see all the changes since the last article.</p>
+</blockquote>
+<h2 id="blockchain-network">Blockchain Network</h2>
+<p>Blockchain network is decentralized, which means there’re no servers 
+that do stuff and clients that use servers to get or process data. In 
+blockchain network there are nodes, and each node is a full-fledged 
+member of the network. A node is everything: it’s both a client and a 
+server. This is very important to keep in mind, because it’s very 
+different from usual web applications.</p>
+<p>Blockchain network is a P2P (Peer-to-Peer) network, which means that 
+nodes are connected directly to each other. It’s topology is flat, since
+ there are no hierarchy in node roles. Here its schematic 
+representation:</p>
+<p><img src="Building%20Blockchain%20in%20Go.%20Part%207%20Network%20-%20Going%20the%20distance_files/p2p-network.png" alt="P2P Network Scheme">
+(<a href="https://www.freepik.com/dooder">Business vector created by Dooder - Freepik.com</a>)</p>
+<p>Nodes in such network are more difficult to implement, because they 
+have to perform a lot of operations. Each node must interact with 
+multiple other nodes, it must request other node’s state, compare it 
+with it’s own state, and update its state when it’s outdated.</p>
+<h2 id="node-roles">Node Roles</h2>
+<p>Despite being full-fledged, blockchain nodes can play different roles in the network. Here they are:</p>
+<ol>
+<li>Miner.<br>
+Such nodes are run on powerful or specialized hardware (like ASIC), and 
+their only goal is to mine new blocks as fast as possible. Miners are 
+only possible in blockchains that use Proof-of-Work, because mining 
+actually means solving PoW puzzles. In Proof-of-Stake blockchains, for 
+example, there’s no mining.</li>
+<li>Full node.<br>
+These nodes validate blocks mined by miners and verify transactions. To 
+do this, they must have the whole copy of blockchain. Also, such nodes 
+perform such routing operations, like helping other nodes to discover 
+each other.<br>
+It’s very crucial for network to have many full nodes, because it’s 
+these nodes that make decisions: they decide if a block or transaction 
+is valid.</li>
+<li>SPV.<br>
+SPV stands for Simplified Payment Verification. These nodes don’t store a
+ full copy of blockchain, but they still able to verify transactions 
+(not all of them, but a subset, for example, those that were sent to 
+specific address). An SPV node depends on a full node to get data from, 
+and there could be many SPV nodes connected to one full node. SPV makes 
+wallet applications possible: one don’t need to download full 
+blockchain, but still can verify their transactions.</li>
+</ol>
+<h2 id="network-simplification">Network simplification</h2>
+<p>To implement network in our blockchain, we have to simplify some 
+things. The problem is that we don’t have many computers to simulate a 
+network with multiple nodes. We could’ve used virtual machines or Docker
+ to solve this problem, but it could make everything more difficult: you
+ would have to solve possible virtual machine or Docker issues, while my
+ goal is to concentrate on blockchain implementation only. So, we want 
+to run multiple blockchain nodes on a single machine and at the same 
+time we want them to have different addresses. To achieve this we’ll use
+ <strong>ports as node identifiers</strong>, instead of IP addresses. E.g., there will be nodes with addresses: <code>127.0.0.1:3000</code>, <code>127.0.0.1:3001</code>, <code>127.0.0.1:3002</code>, etc. We’ll call the port node ID and use <code>NODE_ID</code> environment variable to set them. Thus, you can open multiple terminal windows, set different <code>NODE_ID</code>s and have different nodes running.</p>
+<p>This approach also requires having different blockchains and wallet 
+files. They now must depend on the node ID and be named like <code>blockchain_3000.db</code>, <code>blockchain_30001.db</code> and <code>wallet_3000.db</code>, <code>wallet_30001.db</code>, etc.</p>
+<h2 id="implementation">Implementation</h2>
+<p>So, what happens when you download, say, Bitcoin Core and run it for 
+the first time? It has to connect to some node to downloaded the latest 
+state of the blockchain. Considering that your computer is not aware of 
+all, or some, Bitcoin nodes, what’s this node?</p>
+<p>Hardcoding a node address in Bitcoin Core would’ve been a mistake: 
+the node could be attacked or shut down, which could result in new nodes
+ not being able to join the network. Instead, in Bitcoin Core, there are
+ <a href="https://bitcoin.org/en/glossary/dns-seed">DNS seeds</a> 
+hardcoded. These are not nodes, but DNS servers that know addresses of 
+some nodes. When you start a clean Bitcoin Core, it’ll connect to one of
+ the seeds and get a list of full nodes, which it’ll then download the 
+blockchain from.</p>
+<p>In our implementation, there will be centralization though. We’ll have three nodes:</p>
+<ol>
+<li>The central node. This is the node all other nodes will connect to, and this is the node that’ll sends data between other nodes.</li>
+<li>A miner node. This node will store new transactions in mempool and when there’re enough of transactions, it’ll mine a new block.</li>
+<li>A wallet node. This node will be used to send coins between wallets.
+ Unlike SPV nodes though, it’ll store a full copy of blockchain.</li>
+</ol>
+<h3 id="the-scenario">The Scenario</h3>
+<p>The goal of this article is to implement the following scenario:</p>
+<ol>
+<li>The central node creates a blockchain.</li>
+<li>Other (wallet) node connects to it and downloads the blockchain.</li>
+<li>One more (miner) node connects to the central node and downloads the blockchain.</li>
+<li>The wallet node creates a transaction.</li>
+<li>The miner nodes receives the transaction and keeps it in its memory pool.</li>
+<li>When there are enough transactions in the memory pool, the miner starts mining a new block.</li>
+<li>When a new block is mined, it’s send to the central node.</li>
+<li>The wallet node synchronizes with the central node.</li>
+<li>User of the wallet node checks that their payment was successful.</li>
+</ol>
+<p>This is what it looks like in Bitcoin. Even though we’re not going to
+ build a real P2P network, we’re going to implement a real, and the main
+ and most important, use case of Bitcoin.</p>
+<h3 id="version">version</h3>
+<p>Nodes communicate by the means of messages. When a new node is run, it gets several nodes from a DNS seed, and sends them <code>version</code> message, which in our implementation will look like this:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> version <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+    Version    <span class="token builtin">int</span>
+    BestHeight <span class="token builtin">int</span>
+    AddrFrom   <span class="token builtin">string</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>We have only one blockchain version, so the <code>Version</code> field won’t keep any important information. <code>BestHeight</code> stores the length of the node’s blockchain. <code>AddFrom</code> stores the address of the sender.</p>
+<p>What should a node that receives a <code>version</code> message do? It’ll respond with its own <code>version</code>
+ message. This is a kind of a handshake: no other interaction is 
+possible without prior greeting of each other. But it’s not just 
+politeness: <code>version</code> is used to find a longer blockchain. When a node receives a <code>version</code> message it checks if the node’s blockchain is longer than the value of <code>BestHeight</code>. If it’s not, the node will request and download missing blocks.</p>
+<p>In order to receive message, we need a server:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">var</span> nodeAddress <span class="token builtin">string</span>
+<span class="token keyword">var</span> knownNodes <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">string</span><span class="token punctuation">{</span><span class="token string">"localhost:3000"</span><span class="token punctuation">}</span>
+
+<span class="token keyword">func</span> <span class="token function">StartServer</span><span class="token punctuation">(</span>nodeID<span class="token punctuation">,</span> minerAddress <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    nodeAddress <span class="token operator">=</span> fmt<span class="token punctuation">.</span><span class="token function">Sprintf</span><span class="token punctuation">(</span><span class="token string">"localhost:%s"</span><span class="token punctuation">,</span> nodeID<span class="token punctuation">)</span>
+    miningAddress <span class="token operator">=</span> minerAddress
+    ln<span class="token punctuation">,</span> err <span class="token operator">:=</span> net<span class="token punctuation">.</span><span class="token function">Listen</span><span class="token punctuation">(</span>protocol<span class="token punctuation">,</span> nodeAddress<span class="token punctuation">)</span>
+    <span class="token keyword">defer</span> ln<span class="token punctuation">.</span><span class="token function">Close</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+    bc <span class="token operator">:=</span> <span class="token function">NewBlockchain</span><span class="token punctuation">(</span>nodeID<span class="token punctuation">)</span>
+
+    <span class="token keyword">if</span> nodeAddress <span class="token operator">!=</span> knownNodes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token punctuation">{</span>
+        <span class="token function">sendVersion</span><span class="token punctuation">(</span>knownNodes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span> bc<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">for</span> <span class="token punctuation">{</span>
+        conn<span class="token punctuation">,</span> err <span class="token operator">:=</span> ln<span class="token punctuation">.</span><span class="token function">Accept</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token keyword">go</span> <span class="token function">handleConnection</span><span class="token punctuation">(</span>conn<span class="token punctuation">,</span> bc<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>First, we hardcode the address of the central node: every node must know where to connect to initially. <code>minerAddress</code> argument specifies the address to receive mining rewards to. This piece:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">if</span> nodeAddress <span class="token operator">!=</span> knownNodes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token punctuation">{</span>
+    <span class="token function">sendVersion</span><span class="token punctuation">(</span>knownNodes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span> bc<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Means that if current node is not the central one, it must send <code>version</code> message to the central node to find out if its blockchain is outdated.</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">sendVersion</span><span class="token punctuation">(</span>addr <span class="token builtin">string</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    bestHeight <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">GetBestHeight</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    payload <span class="token operator">:=</span> <span class="token function">gobEncode</span><span class="token punctuation">(</span>version<span class="token punctuation">{</span>nodeVersion<span class="token punctuation">,</span> bestHeight<span class="token punctuation">,</span> nodeAddress<span class="token punctuation">}</span><span class="token punctuation">)</span>
+
+    request <span class="token operator">:=</span> <span class="token function">append</span><span class="token punctuation">(</span><span class="token function">commandToBytes</span><span class="token punctuation">(</span><span class="token string">"version"</span><span class="token punctuation">)</span><span class="token punctuation">,</span> payload<span class="token operator">...</span><span class="token punctuation">)</span>
+
+    <span class="token function">sendData</span><span class="token punctuation">(</span>addr<span class="token punctuation">,</span> request<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Our messages, on the lower level, are sequences of
+ bytes. First 12 bytes specify command name (“version” in this case), 
+and the latter bytes will contain <code>gob</code>-encoded message structure. <code>commandToBytes</code> looks like this:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">commandToBytes</span><span class="token punctuation">(</span>command <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span> <span class="token punctuation">{</span>
+    <span class="token keyword">var</span> bytes <span class="token punctuation">[</span>commandLength<span class="token punctuation">]</span><span class="token builtin">byte</span>
+
+    <span class="token keyword">for</span> i<span class="token punctuation">,</span> c <span class="token operator">:=</span> <span class="token keyword">range</span> command <span class="token punctuation">{</span>
+        bytes<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">byte</span><span class="token punctuation">(</span>c<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">return</span> bytes<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>It creates a 12-byte buffer and fills it with the command name, leaving rest bytes empty. There’s an opposite function:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">bytesToCommand</span><span class="token punctuation">(</span>bytes <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">)</span> <span class="token builtin">string</span> <span class="token punctuation">{</span>
+    <span class="token keyword">var</span> command <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+
+    <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> b <span class="token operator">:=</span> <span class="token keyword">range</span> bytes <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> b <span class="token operator">!=</span> <span class="token number">0x0</span> <span class="token punctuation">{</span>
+            command <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>command<span class="token punctuation">,</span> b<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">return</span> fmt<span class="token punctuation">.</span><span class="token function">Sprintf</span><span class="token punctuation">(</span><span class="token string">"%s"</span><span class="token punctuation">,</span> command<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>When a node receives a command, it runs <code>bytesToCommand</code> to extract command name and processes command body with correct handler:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">handleConnection</span><span class="token punctuation">(</span>conn net<span class="token punctuation">.</span>Conn<span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    request<span class="token punctuation">,</span> err <span class="token operator">:=</span> ioutil<span class="token punctuation">.</span><span class="token function">ReadAll</span><span class="token punctuation">(</span>conn<span class="token punctuation">)</span>
+    command <span class="token operator">:=</span> <span class="token function">bytesToCommand</span><span class="token punctuation">(</span>request<span class="token punctuation">[</span><span class="token punctuation">:</span>commandLength<span class="token punctuation">]</span><span class="token punctuation">)</span>
+    fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Received %s command\n"</span><span class="token punctuation">,</span> command<span class="token punctuation">)</span>
+
+    <span class="token keyword">switch</span> command <span class="token punctuation">{</span>
+    <span class="token operator">...</span>
+    <span class="token keyword">case</span> <span class="token string">"version"</span><span class="token punctuation">:</span>
+        <span class="token function">handleVersion</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> bc<span class="token punctuation">)</span>
+    <span class="token keyword">default</span><span class="token punctuation">:</span>
+        fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"Unknown command!"</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+
+    conn<span class="token punctuation">.</span><span class="token function">Close</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Ok, this is what the <code>version</code> command handler looks like:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">handleVersion</span><span class="token punctuation">(</span>request <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">var</span> buff bytes<span class="token punctuation">.</span>Buffer
+    <span class="token keyword">var</span> payload verzion
+
+    buff<span class="token punctuation">.</span><span class="token function">Write</span><span class="token punctuation">(</span>request<span class="token punctuation">[</span>commandLength<span class="token punctuation">:</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    dec <span class="token operator">:=</span> gob<span class="token punctuation">.</span><span class="token function">NewDecoder</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>buff<span class="token punctuation">)</span>
+    err <span class="token operator">:=</span> dec<span class="token punctuation">.</span><span class="token function">Decode</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>payload<span class="token punctuation">)</span>
+
+    myBestHeight <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">GetBestHeight</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    foreignerBestHeight <span class="token operator">:=</span> payload<span class="token punctuation">.</span>BestHeight
+
+    <span class="token keyword">if</span> myBestHeight <span class="token operator">&lt;</span> foreignerBestHeight <span class="token punctuation">{</span>
+        <span class="token function">sendGetBlocks</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> myBestHeight <span class="token operator">&gt;</span> foreignerBestHeight <span class="token punctuation">{</span>
+        <span class="token function">sendVersion</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">,</span> bc<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token operator">!</span><span class="token function">nodeIsKnown</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        knownNodes <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>knownNodes<span class="token punctuation">,</span> payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>First, we need to decode the request and extract 
+the payload. This is similar to all the handlers, so I’ll omit this 
+piece in the future code snippets.</p>
+<p>Then a node compares its <code>BestHeight</code> with the one from the message. If the node’s blockchain is longer, it’ll reply with <code>version</code> message; otherwise, it’ll send <code>getblocks</code> message.</p>
+<h3 id="getblocks">getblocks</h3>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> getblocks <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+    AddrFrom <span class="token builtin">string</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p><code>getblocks</code> means “show me what blocks 
+you have” (in Bitcoin, it’s more complex). Pay attention, it doesn’t say
+ “give me all your blocks”, instead it requests a list of block hashes. 
+This is done to reduce network load, because blocks can be downloaded 
+from different nodes, and we don’t want to download dozens of gigabytes 
+from one node.</p>
+<p>Handling the command as easy as:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">handleGetBlocks</span><span class="token punctuation">(</span>request <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token operator">...</span>
+    blocks <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">GetBlockHashes</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token function">sendInv</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">,</span> <span class="token string">"block"</span><span class="token punctuation">,</span> blocks<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>In our simplified implementation, it’ll return <strong>all block hashes</strong>.</p>
+<h3 id="inv">inv</h3>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> inv <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+    AddrFrom <span class="token builtin">string</span>
+    Type     <span class="token builtin">string</span>
+    Items    <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Bitcoin uses <code>inv</code> to show other nodes 
+what blocks or transactions current node has. Again, it doesn’t contain 
+whole blocks and transactions, just their hashes. The <code>Type</code> field says whether these are blocks or transactions.</p>
+<p>Handling <code>inv</code> is more difficult:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">handleInv</span><span class="token punctuation">(</span>request <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token operator">...</span>
+    fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Recevied inventory with %d %s\n"</span><span class="token punctuation">,</span> <span class="token function">len</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>Items<span class="token punctuation">)</span><span class="token punctuation">,</span> payload<span class="token punctuation">.</span>Type<span class="token punctuation">)</span>
+
+    <span class="token keyword">if</span> payload<span class="token punctuation">.</span>Type <span class="token operator">==</span> <span class="token string">"block"</span> <span class="token punctuation">{</span>
+        blocksInTransit <span class="token operator">=</span> payload<span class="token punctuation">.</span>Items
+
+        blockHash <span class="token operator">:=</span> payload<span class="token punctuation">.</span>Items<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>
+        <span class="token function">sendGetData</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">,</span> <span class="token string">"block"</span><span class="token punctuation">,</span> blockHash<span class="token punctuation">)</span>
+
+        newInTransit <span class="token operator">:=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+        <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> b <span class="token operator">:=</span> <span class="token keyword">range</span> blocksInTransit <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> bytes<span class="token punctuation">.</span><span class="token function">Compare</span><span class="token punctuation">(</span>b<span class="token punctuation">,</span> blockHash<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+                newInTransit <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>newInTransit<span class="token punctuation">,</span> b<span class="token punctuation">)</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        blocksInTransit <span class="token operator">=</span> newInTransit
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> payload<span class="token punctuation">.</span>Type <span class="token operator">==</span> <span class="token string">"tx"</span> <span class="token punctuation">{</span>
+        txID <span class="token operator">:=</span> payload<span class="token punctuation">.</span>Items<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>
+
+        <span class="token keyword">if</span> mempool<span class="token punctuation">[</span>hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>txID<span class="token punctuation">)</span><span class="token punctuation">]</span><span class="token punctuation">.</span>ID <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+            <span class="token function">sendGetData</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">,</span> <span class="token string">"tx"</span><span class="token punctuation">,</span> txID<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>If blocks hashes are transferred, we want to save them in <code>blocksInTransit</code> variable to track downloaded blocks. This allows us to download blocks from different nodes.
+Right after putting blocks into the transit state, we send <code>getdata</code> command to the sender of the <code>inv</code> message and update <code>blocksInTransit</code>. In a real P2P network, we would want to transfer blocks from different nodes.</p>
+<p>In our implementation, we’ll never send <code>inv</code> with multiple hashes. That’s why when <code>payload.Type == "tx"</code> only the first hash is taken. Then we check if we already have the hash in our mempool, and if not, <code>getdata</code> message is sent.</p>
+<h3 id="getdata">getdata</h3>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> getdata <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+    AddrFrom <span class="token builtin">string</span>
+    Type     <span class="token builtin">string</span>
+    ID       <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p><code>getdata</code> is a request for certain block or transaction, and it can contain only one block/transaction ID.</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">handleGetData</span><span class="token punctuation">(</span>request <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token operator">...</span>
+    <span class="token keyword">if</span> payload<span class="token punctuation">.</span>Type <span class="token operator">==</span> <span class="token string">"block"</span> <span class="token punctuation">{</span>
+        block<span class="token punctuation">,</span> err <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">GetBlock</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token function">byte</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>ID<span class="token punctuation">)</span><span class="token punctuation">)</span>
+
+        <span class="token function">sendBlock</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">,</span> <span class="token operator">&amp;</span>block<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> payload<span class="token punctuation">.</span>Type <span class="token operator">==</span> <span class="token string">"tx"</span> <span class="token punctuation">{</span>
+        txID <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>ID<span class="token punctuation">)</span>
+        tx <span class="token operator">:=</span> mempool<span class="token punctuation">[</span>txID<span class="token punctuation">]</span>
+
+        <span class="token function">sendTx</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">,</span> <span class="token operator">&amp;</span>tx<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>The handler is straightforward: if they request a 
+block, return the block; if they request a transaction, return the 
+transaction. Notice, that we don’t check if we actually have this block 
+or transaction. This is a flaw :)</p>
+<h3 id="block-and-tx">block and tx</h3>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> block <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+    AddrFrom <span class="token builtin">string</span>
+    Block    <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">type</span> tx <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+    AddFrom     <span class="token builtin">string</span>
+    Transaction <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>It’s these messages that actually transfer the data.</p>
+<p>Handling the <code>block</code> message is easy:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">handleBlock</span><span class="token punctuation">(</span>request <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token operator">...</span>
+
+    blockData <span class="token operator">:=</span> payload<span class="token punctuation">.</span>Block
+    block <span class="token operator">:=</span> <span class="token function">DeserializeBlock</span><span class="token punctuation">(</span>blockData<span class="token punctuation">)</span>
+
+    fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"Recevied a new block!"</span><span class="token punctuation">)</span>
+    bc<span class="token punctuation">.</span><span class="token function">AddBlock</span><span class="token punctuation">(</span>block<span class="token punctuation">)</span>
+
+    fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Added block %x\n"</span><span class="token punctuation">,</span> block<span class="token punctuation">.</span>Hash<span class="token punctuation">)</span>
+
+    <span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>blocksInTransit<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+        blockHash <span class="token operator">:=</span> blocksInTransit<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>
+        <span class="token function">sendGetData</span><span class="token punctuation">(</span>payload<span class="token punctuation">.</span>AddrFrom<span class="token punctuation">,</span> <span class="token string">"block"</span><span class="token punctuation">,</span> blockHash<span class="token punctuation">)</span>
+
+        blocksInTransit <span class="token operator">=</span> blocksInTransit<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">:</span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        UTXOSet <span class="token operator">:=</span> UTXOSet<span class="token punctuation">{</span>bc<span class="token punctuation">}</span>
+        UTXOSet<span class="token punctuation">.</span><span class="token function">Reindex</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>When we received a new block, we put it into our 
+blockchain. If there’re more blocks to download, we request them from 
+the same node we downloaded the previous block. When we finally 
+downloaded all the blocks, the UTXO set is reindexed.</p>
+<blockquote>
+<p>TODO: Instead of trusting unconditionally, we should validate every incoming block before adding it to the blockchain.</p>
+</blockquote>
+<blockquote>
+<p>TODO: Instead of running UTXOSet.Reindex(), UTXOSet.Update(block) 
+should be used, because if blockchain is big, it’ll take a lot of time 
+to reindex the whole UTXO set.</p>
+</blockquote>
+<p>Handling <code>tx</code> messages is the most difficult part:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">handleTx</span><span class="token punctuation">(</span>request <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token operator">...</span>
+    txData <span class="token operator">:=</span> payload<span class="token punctuation">.</span>Transaction
+    tx <span class="token operator">:=</span> <span class="token function">DeserializeTransaction</span><span class="token punctuation">(</span>txData<span class="token punctuation">)</span>
+    mempool<span class="token punctuation">[</span>hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>tx<span class="token punctuation">.</span>ID<span class="token punctuation">)</span><span class="token punctuation">]</span> <span class="token operator">=</span> tx
+
+    <span class="token keyword">if</span> nodeAddress <span class="token operator">==</span> knownNodes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token punctuation">{</span>
+        <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> node <span class="token operator">:=</span> <span class="token keyword">range</span> knownNodes <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> node <span class="token operator">!=</span> nodeAddress <span class="token operator">&amp;&amp;</span> node <span class="token operator">!=</span> payload<span class="token punctuation">.</span>AddFrom <span class="token punctuation">{</span>
+                <span class="token function">sendInv</span><span class="token punctuation">(</span>node<span class="token punctuation">,</span> <span class="token string">"tx"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span>tx<span class="token punctuation">.</span>ID<span class="token punctuation">}</span><span class="token punctuation">)</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>mempool<span class="token punctuation">)</span> <span class="token operator">&gt;=</span> <span class="token number">2</span> <span class="token operator">&amp;&amp;</span> <span class="token function">len</span><span class="token punctuation">(</span>miningAddress<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+        MineTransactions<span class="token punctuation">:</span>
+            <span class="token keyword">var</span> txs <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Transaction
+
+            <span class="token keyword">for</span> id <span class="token operator">:=</span> <span class="token keyword">range</span> mempool <span class="token punctuation">{</span>
+                tx <span class="token operator">:=</span> mempool<span class="token punctuation">[</span>id<span class="token punctuation">]</span>
+                <span class="token keyword">if</span> bc<span class="token punctuation">.</span><span class="token function">VerifyTransaction</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tx<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    txs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>txs<span class="token punctuation">,</span> <span class="token operator">&amp;</span>tx<span class="token punctuation">)</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>txs<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+                fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"All transactions are invalid! Waiting for new ones..."</span><span class="token punctuation">)</span>
+                <span class="token keyword">return</span>
+            <span class="token punctuation">}</span>
+
+            cbTx <span class="token operator">:=</span> <span class="token function">NewCoinbaseTX</span><span class="token punctuation">(</span>miningAddress<span class="token punctuation">,</span> <span class="token string">""</span><span class="token punctuation">)</span>
+            txs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>txs<span class="token punctuation">,</span> cbTx<span class="token punctuation">)</span>
+
+            newBlock <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">MineBlock</span><span class="token punctuation">(</span>txs<span class="token punctuation">)</span>
+            UTXOSet <span class="token operator">:=</span> UTXOSet<span class="token punctuation">{</span>bc<span class="token punctuation">}</span>
+            UTXOSet<span class="token punctuation">.</span><span class="token function">Reindex</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+            fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"New block is mined!"</span><span class="token punctuation">)</span>
+
+            <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> tx <span class="token operator">:=</span> <span class="token keyword">range</span> txs <span class="token punctuation">{</span>
+                txID <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>tx<span class="token punctuation">.</span>ID<span class="token punctuation">)</span>
+                <span class="token function">delete</span><span class="token punctuation">(</span>mempool<span class="token punctuation">,</span> txID<span class="token punctuation">)</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> node <span class="token operator">:=</span> <span class="token keyword">range</span> knownNodes <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> node <span class="token operator">!=</span> nodeAddress <span class="token punctuation">{</span>
+                    <span class="token function">sendInv</span><span class="token punctuation">(</span>node<span class="token punctuation">,</span> <span class="token string">"block"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span>newBlock<span class="token punctuation">.</span>Hash<span class="token punctuation">}</span><span class="token punctuation">)</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>mempool<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+                <span class="token keyword">goto</span> MineTransactions
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>First thing to do is to put new transaction in the
+ mempool (again, transactions must be verified before being placed into 
+the mempool). Next piece:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">if</span> nodeAddress <span class="token operator">==</span> knownNodes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> node <span class="token operator">:=</span> <span class="token keyword">range</span> knownNodes <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> node <span class="token operator">!=</span> nodeAddress <span class="token operator">&amp;&amp;</span> node <span class="token operator">!=</span> payload<span class="token punctuation">.</span>AddFrom <span class="token punctuation">{</span>
+            <span class="token function">sendInv</span><span class="token punctuation">(</span>node<span class="token punctuation">,</span> <span class="token string">"tx"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span>tx<span class="token punctuation">.</span>ID<span class="token punctuation">}</span><span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Checks whether the current node is the central 
+one. In our implementation, the central node won’t mine blocks. Instead,
+ it’ll forward the new transactions to other nodes in the network.</p>
+<p>The next big piece is only for miner nodes. Let’s split it into smaller pieces:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>mempool<span class="token punctuation">)</span> <span class="token operator">&gt;=</span> <span class="token number">2</span> <span class="token operator">&amp;&amp;</span> <span class="token function">len</span><span class="token punctuation">(</span>miningAddress<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+</code></pre></div><p><code>miningAddress</code> is only set on miner nodes. When there are 2 or more transactions in the mempool of the current (miner) node, mining begins.</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">for</span> id <span class="token operator">:=</span> <span class="token keyword">range</span> mempool <span class="token punctuation">{</span>
+    tx <span class="token operator">:=</span> mempool<span class="token punctuation">[</span>id<span class="token punctuation">]</span>
+    <span class="token keyword">if</span> bc<span class="token punctuation">.</span><span class="token function">VerifyTransaction</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tx<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        txs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>txs<span class="token punctuation">,</span> <span class="token operator">&amp;</span>tx<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>txs<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+    fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"All transactions are invalid! Waiting for new ones..."</span><span class="token punctuation">)</span>
+    <span class="token keyword">return</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>First, all transactions in the mempool are 
+verified. Invalid transactions are ignored, and if there are no valid 
+transactions, mining is interrupted.</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go">cbTx <span class="token operator">:=</span> <span class="token function">NewCoinbaseTX</span><span class="token punctuation">(</span>miningAddress<span class="token punctuation">,</span> <span class="token string">""</span><span class="token punctuation">)</span>
+txs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>txs<span class="token punctuation">,</span> cbTx<span class="token punctuation">)</span>
+
+newBlock <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">MineBlock</span><span class="token punctuation">(</span>txs<span class="token punctuation">)</span>
+UTXOSet <span class="token operator">:=</span> UTXOSet<span class="token punctuation">{</span>bc<span class="token punctuation">}</span>
+UTXOSet<span class="token punctuation">.</span><span class="token function">Reindex</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"New block is mined!"</span><span class="token punctuation">)</span>
+</code></pre></div><p>Verified transactions are being put into a block, 
+as well as a coinbase transaction with the reward. After mining the 
+block, the UTXO set is reindexed.</p>
+<blockquote>
+<p>TODO: Again, UTXOSet.Update should be used instead of UTXOSet.Reindex</p>
+</blockquote>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> tx <span class="token operator">:=</span> <span class="token keyword">range</span> txs <span class="token punctuation">{</span>
+    txID <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>tx<span class="token punctuation">.</span>ID<span class="token punctuation">)</span>
+    <span class="token function">delete</span><span class="token punctuation">(</span>mempool<span class="token punctuation">,</span> txID<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> node <span class="token operator">:=</span> <span class="token keyword">range</span> knownNodes <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> node <span class="token operator">!=</span> nodeAddress <span class="token punctuation">{</span>
+        <span class="token function">sendInv</span><span class="token punctuation">(</span>node<span class="token punctuation">,</span> <span class="token string">"block"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span>newBlock<span class="token punctuation">.</span>Hash<span class="token punctuation">}</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>mempool<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+    <span class="token keyword">goto</span> MineTransactions
+<span class="token punctuation">}</span>
+</code></pre></div><p>After a transaction is mined, it’s removed from the mempool. Every other nodes the current node is aware of, receive <code>inv</code> message with the new block’s hash. They can request the block after handling the message.</p>
+<h2 id="result">Result</h2>
+<p>Let’s play the scenario we defined earlier.</p>
+<p>First, set <code>NODE_ID</code> to 3000 (<code>export NODE_ID=3000</code>) in the first terminal window. I’ll use badges like <code>NODE 3000</code> or <code>NODE 3001</code> before next paragraphs, for you to know what node to perform actions on.</p>
+<p><code>NODE 3000</code><br>
+Create a wallet and a new blockchain:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go createblockchain -address CENTREAL_NODE
+</code></pre></div><p>(I’ll use fake addresses for clarity and brevity)</p>
+<p>After that, the blockchain will contain single genesis block. We need
+ to save the block and use it in other nodes. Genesis blocks serve as 
+identifiers of blockchains (in Bitcoin Core, the genesis block is 
+hardcoded).</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ <span class="token function">cp</span> blockchain_3000.db blockchain_genesis.db 
+</code></pre></div><p><code>NODE 3001</code><br>
+Next, open a new terminal window and set node ID to 3001. This will be a wallet node. Generate some addresses with <code>blockchain_go createwallet</code>, we’ll call these addresses <code>WALLET_1</code>, <code>WALLET_2</code>, <code>WALLET_3</code>.</p>
+<p><code>NODE 3000</code><br>
+Send some coins to the wallet addresses:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go send -from CENTREAL_NODE -to WALLET_1 -amount <span class="token number">10</span> -mine
+$ blockchain_go send -from CENTREAL_NODE -to WALLET_2 -amount <span class="token number">10</span> -mine
+</code></pre></div><p><code>-mine</code> flag means that the block will 
+be immediately mined by the same node. We have to have this flag because
+ initially there are no miner nodes in the network.<br>
+Start the node:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go startnode
+</code></pre></div><p>The node must be running until the end of the scenario.</p>
+<p><code>NODE 3001</code><br>
+Start the node’s blockchain with the genesis block saved above:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ <span class="token function">cp</span> blockchain_genesis.db blockchain_3001.db
+</code></pre></div><p>Run the node:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go startnode
+</code></pre></div><p>It’ll download all the blocks from the central node. To check that everything’s ok, stop the node and check the balances:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go getbalance -address WALLET_1
+Balance of <span class="token string">'WALLET_1'</span><span class="token builtin class-name">:</span> <span class="token number">10</span>
+
+$ blockchain_go getbalance -address WALLET_2
+Balance of <span class="token string">'WALLET_2'</span><span class="token builtin class-name">:</span> <span class="token number">10</span>
+</code></pre></div><p>Also, you can check the balance of the <code>CENTRAL_NODE</code> address, because the node 3001 now has its blockchain:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go getbalance -address CENTRAL_NODE
+Balance of <span class="token string">'CENTRAL_NODE'</span><span class="token builtin class-name">:</span> <span class="token number">10</span>
+</code></pre></div><p><code>NODE 3002</code><br>
+Open a new terminal window and set its ID to 3002, and generate a wallet. This will be a miner node. Initialize the blockchain:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ <span class="token function">cp</span> blockchain_genesis.db blockchain_3002.db
+</code></pre></div><p>And start the node:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go startnode -miner MINER_WALLET
+</code></pre></div><p><code>NODE 3001</code><br>
+Send some coins:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go send -from WALLET_1 -to WALLET_3 -amount <span class="token number">1</span>
+$ blockchain_go send -from WALLET_2 -to WALLET_4 -amount <span class="token number">1</span>
+</code></pre></div><p><code>NODE 3002</code><br>
+Quickly! Switch to the miner node and see it mining a new block! Also, check the output of the central node.</p>
+<p><code>NODE 3001</code><br>
+Switch to the wallet node and start it:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go startnode
+</code></pre></div><p>It’ll download the newly mined block!</p>
+<p>Stop it and check balances:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go getbalance -address WALLET_1
+Balance of <span class="token string">'WALLET_1'</span><span class="token builtin class-name">:</span> <span class="token number">9</span>
+
+$ blockchain_go getbalance -address WALLET_2
+Balance of <span class="token string">'WALLET_2'</span><span class="token builtin class-name">:</span> <span class="token number">9</span>
+
+$ blockchain_go getbalance -address WALLET_3
+Balance of <span class="token string">'WALLET_3'</span><span class="token builtin class-name">:</span> <span class="token number">1</span>
+
+$ blockchain_go getbalance -address WALLET_4
+Balance of <span class="token string">'WALLET_4'</span><span class="token builtin class-name">:</span> <span class="token number">1</span>
+
+$ blockchain_go getbalance -address MINER_WALLET
+Balance of <span class="token string">'MINER_WALLET'</span><span class="token builtin class-name">:</span> <span class="token number">10</span>
+</code></pre></div><p>That’s it!</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>This was the final part of the series. I could’ve publish some more 
+posts implementing a real prototype of a P2P network, but I just don’t 
+have time for this. I hope this article answers some of your questions 
+about the Bitcoin technology and raises new ones, for which you can find
+ answers yourself. There are more interesting things hidden in the 
+Bitcoin technology! Good luck!</p>
+<p>P.S. You can start improving the network with implementing the <code>addr</code>
+ message, as described in the Bitcoin network protocol (link is below). 
+This is a very important message, because it allows nodes to discover 
+each other. I started implementing it, but haven’t finished!</p>
+<p>Links:</p>
+<ol>
+<li><a href="https://github.com/Jeiwan/blockchain_go/tree/part_7">Source codes</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Protocol_documentation">Bitcoin protocol documentation</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Network">Bitcoin network</a></li>
+</ol>
+
+
+</article>
+
+<hr>
+<br>
+
+
+
+
+
+
+      <footer class="site-footer">
+        <span itemscope="" itemtype="http://schema.org/Person">
+          <link itemprop="url" href="https://jeiwan.net/">
+
+          Author:
+          <span itemprop="name">Ivan Kuznetsov</span>
+
+          <br>
+
+          Get in touch:
+
+          <a itemprop="sameAs" href="mailto:me@jeiwan.ru" target="_blank">E-mail</a>
+
+          <a itemprop="sameAs" href="https://t.me/jeiwan" title="Telegram" target="_blank">Telegram</a>
+
+          <a itemprop="sameAs" href="https://twitter.com/jeiwan7" title="Twitter" target="_blank">Twitter</a>
+
+          <a itemprop="sameAs" href="https://github.com/jeiwan" title="GitHub" target="_blank">GitHub</a>
+
+          
+        </span>
+
+        <br><br>
+
+        <div style="text-align:center">
+          <small>
+            <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="Building%20Blockchain%20in%20Go.%20Part%207%20Network%20-%20Going%20the%20distance_files/88x31.png"></a><br>Content of this site is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
+          </small>
+        </div>
+
+        
+      </footer>
+    </div>
+
+  
+
+    <script src="Building%20Blockchain%20in%20Go.%20Part%207%20Network%20-%20Going%20the%20distance_files/prism.js"></script>
+
+  
+
+</body></html>

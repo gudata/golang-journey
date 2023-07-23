@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:og="http://ogp.me/ns#" xmlns:fb="https://www.facebook.com/2008/fbml"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>REST Servers in Go: Part 2 - using a router package - Eli Bendersky's website</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://eli.thegreenplace.net/favicon.ico" rel="icon">
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.css" type="text/css">
+    <link href="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/font-awesome.min.css" rel="stylesheet">
+
+    <link href="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/vs.css" rel="stylesheet">
+    <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/style.css" type="text/css">
+
+        <link href="https://eli.thegreenplace.net/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Eli Bendersky's website ATOM Feed">
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://eli.thegreenplace.net/" class="navbar-brand">
+                <img src="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/logosmall.png" width="32" height="32">
+Eli Bendersky's website            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="https://eli.thegreenplace.net/pages/about">
+                        <i class="fa fa-question"></i>
+                        <span class="icon-label">About</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://eli.thegreenplace.net/archives/all">
+                        <i class="fa fa-th-list"></i>
+                        <span class="icon-label">Archives</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+
+<div class="container">
+    <div class="row">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/" rel="bookmark" title="Permalink to REST Servers in Go: Part 2 - using a router package">
+                        REST Servers in Go: Part 2 - using a router package
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="published">
+        <i class="fa fa-calendar"></i>
+        <time> January 21, 2021 at 20:50</time>
+    </span>
+<span class="label label-default">Tags</span>
+    <a href="https://eli.thegreenplace.net/tag/go">Go</a>
+        ,
+    <a href="https://eli.thegreenplace.net/tag/network-programming">Network Programming</a>
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>This is the second post in a series about writing REST servers in Go. Here is a
+list of posts in the series:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">Part 1 - standard library</a></li>
+<li>Part 2 - using a router package (this post)</li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/">Part 3 - using a web framework</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/">Part 4 - using OpenAPI and Swagger</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/">Part 5 - middleware</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/">Part 6 - authentication</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/">Part 7 - GraphQL</a></li>
+</ul>
+<div class="section" id="where-we-left-off-in-part-1">
+<h2>Where we left off in Part 1</h2>
+<p><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">Part 1</a> concluded with a version of our Go server where we've
+refactored JSON rendering into a helper function, making specific route handlers
+fairly concise.</p>
+<p>The remaining issue we had is the path routing logic, which is scattered across
+several places.</p>
+<p>This is a problem all folks who write no-dependency HTTP servers run into.
+Unless the server is very minimal w.r.t. the routes it has (e.g. some
+specialized servers only have one or two routes they handle), the verbosity and
+difficulty of organizing the router code is something experienced programmers
+notice very quickly.</p>
+</div>
+<div class="section" id="advanced-routing">
+<h2>Advanced routing</h2>
+<p>The first instinct is to abstract the routing away, perhaps with a set of
+functions or a data type with methods. There are many interesting ad-hoc ways
+to do this, and many powerful and well-used 3rd party router packages in the Go
+ecosystem which do it for you. I strongly recommend reviewing <a class="reference external" href="https://benhoyt.com/writings/go-routing/">this post by
+Ben Hoyt</a>, in which he compares and
+contrasts several approaches (ad-hoc and 3rd party) for a simple set of routes.</p>
+<p>Let's revisit our server's REST API for a concrete example:</p>
+<div class="highlight"><pre><span></span>POST   /task/              :  create a task, returns ID
+GET    /task/&lt;taskid&gt;      :  returns a single task by ID
+GET    /task/              :  returns all tasks
+DELETE /task/&lt;taskid&gt;      :  delete a task by ID
+GET    /tag/&lt;tagname&gt;      :  returns list of tasks with this tag
+GET    /due/&lt;yy&gt;/&lt;mm&gt;/&lt;dd&gt; :  returns list of tasks due by this date
+</pre></div>
+<p>There are several things we could do to make routing more ergonomic:</p>
+<ol class="arabic simple">
+<li>Add a way to set separate handlers for different methods on the same route.
+E.g. <tt class="docutils literal">POST</tt> for <tt class="docutils literal">/task/</tt> should go to one handler, <tt class="docutils literal">GET /task/</tt> into
+another, etc.</li>
+<li>Add a way to have "deeper" matches; e.g. we should be able to say that
+<tt class="docutils literal">/task/</tt> goes to one handler, while <tt class="docutils literal"><span class="pre">/task/&lt;taskid&gt;</span></tt> for a numeric ID
+goes into another.</li>
+<li>While we're at it, the matcher should just extract the numeric ID from
+<tt class="docutils literal"><span class="pre">/task/&lt;taskid&gt;</span></tt> and pass it into the handler in some convenient way.</li>
+</ol>
+<p>Writing a custom router in Go is very simple, due to the composable nature of
+HTTP handlers. For this series of posts, I'll resist the temptation. Instead,
+let's see how all of this is handled by one of the most popular 3rd party
+routers - <a class="reference external" href="https://github.com/gorilla/mux">gorilla/mux</a>.</p>
+</div>
+<div class="section" id="task-server-with-gorilla-mux">
+<h2>Task server with gorilla/mux</h2>
+<p><tt class="docutils literal">gorilla/mux</tt> is one of the oldest of the popular Go HTTP routers; according
+to <a class="reference external" href="https://pkg.go.dev/github.com/gorilla/mux">the docs</a>, the name mux stands
+for "HTTP request multiplexer" (the same meaning it has in the standard
+library).</p>
+<p>Because it's a package with a narrow, focused goal, its usage is fairly
+straightforward. A version of our task server that uses <tt class="docutils literal">gorilla/mux</tt> for
+routing is <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/gorilla">available here</a>.
+Here's how the routes are defined:</p>
+<div class="highlight"><pre><span></span><span class="nx">router</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">mux</span><span class="p">.</span><span class="nx">NewRouter</span><span class="p">()</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">StrictSlash</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="w"></span>
+<span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">createTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"POST"</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getAllTasksHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteAllTasksHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"DELETE"</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/{id:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/{id:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"DELETE"</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/tag/{tag}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/{year:[0-9]+}/{month:[0-9]+}/{day:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+</pre></div>
+<p>Note how these definitions immediately address points (1) and (2) in the
+"ergonomics wishlist" outlined above. By tacking a <tt class="docutils literal">Methods</tt> call onto a
+route, we can easily direct different methods on the same path to different
+handlers. Pattern matching (using regexp syntax) in the path lets us easily
+distinguish between <tt class="docutils literal">/task/</tt> and <tt class="docutils literal"><span class="pre">/task/&lt;taskid&gt;</span></tt> in the top-level route
+definition.</p>
+<p>To see how point (3) is addressed, let's take a look at <tt class="docutils literal">getTaskHandler</tt>:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="p">)</span><span class="w"> </span><span class="nx">getTaskHandler</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">"handling get task at %s\n"</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// Here and elsewhere, not checking error of Atoi because the router only</span><span class="w"></span>
+<span class="w">  </span><span class="c1">// matches the [0-9]+ regex.</span><span class="w"></span>
+<span class="w">  </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strconv</span><span class="p">.</span><span class="nx">Atoi</span><span class="p">(</span><span class="nx">mux</span><span class="p">.</span><span class="nx">Vars</span><span class="p">(</span><span class="nx">req</span><span class="p">)[</span><span class="s">"id"</span><span class="p">])</span><span class="w"></span>
+<span class="w">  </span><span class="nx">ts</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">task</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ts</span><span class="p">.</span><span class="nx">store</span><span class="p">.</span><span class="nx">GetTask</span><span class="p">(</span><span class="nx">id</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">ts</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusNotFound</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">renderJSON</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">task</span><span class="p">)</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>In the route definition, the route <tt class="docutils literal"><span class="pre">/task/{id:[0-9]+}/</span></tt> defines the regexp to
+parse a path, but also assigns the identifier part to "id". This "variable" can
+be accessed by calling <tt class="docutils literal">mux.Vars</tt> on the request <a class="footnote-reference" href="#footnote-1" id="footnote-reference-1">[1]</a>.</p>
+</div>
+<div class="section" id="comparing-the-approaches">
+<h2>Comparing the approaches</h2>
+<p>Here is the code-reading path one must take in order to understand how the <tt class="docutils literal">GET
+<span class="pre">/task/&lt;taskid&gt;</span></tt> route is handled in our original server:</p>
+<img alt="HTTP route handler path without custom router" class="align-center" src="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/http-route-handler.png">
+<p>Whereas this is the path when using <tt class="docutils literal">gorilla/mux</tt>:</p>
+<img alt="HTTP route handler path with gorilla/mux router" class="align-center" src="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/gorilla-route-handler.png">
+<p>In addition to having fewer hoops to jump through, it's also significantly less
+code to read. IMHO this is very good from a code readability point of view.
+The path definitions using <tt class="docutils literal">gorilla/mux</tt> are short and straightforward, and
+don't involve much magic; it's pretty clear how this works. An additional
+advantage is that we can now easily see all the routes in a single glance in a
+single place. In fact, the route configuration code now looks very similar to
+our informal REST API definition.</p>
+<p>I like using packages like <tt class="docutils literal">gorilla/mux</tt>, because they are a precision tool.
+They do one thing and they do it well, and they don't "infect" the whole program
+in a way that makes them hard to remove or replace later on. If you examine the
+<a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/gorilla">code of the server for this part</a>,
+you'll note that the parts using <tt class="docutils literal">gorilla/mux</tt> are confined to relatively few
+lines of code. If we find a fatal limitation in this package later on in the
+lifecycle of the project, replacing it with another router (or a hand-rolled
+version) should be fairly straightforward.</p>
+<hr class="docutils">
+<table class="docutils footnote" frame="void" id="footnote-1" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-1">[1]</a></td><td>It's stored by <tt class="docutils literal">gorilla/mux</tt> in the context of each request,
+and <tt class="docutils literal">mux.Vars</tt> is a convenience function to fetch it from there.</td></tr>
+</tbody>
+</table>
+</div>
+
+            </div>
+            <!-- /.entry-content -->
+<hr>
+<div class="dotted-links">
+<p class="align-center">
+For comments, please send me
+<a href="mailto:eliben@gmail.com"><i class="fa fa-envelope-o"></i> an email</a>.
+</p>
+</div>        </article>
+    </section>
+
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">
+            © 2003-2023 Eli Bendersky
+         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/jquery-2.2.4.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.js"></script>
+
+<!--
+  Using goatcounter to count visitors. The count.js script is vendored in.
+-->
+<script data-goatcounter="https://stats.thegreenplace.net/count" async="" src="REST%20Servers%20in%20Go%20Part%202%20-%20using%20a%20router%20package%20-%20Eli%20Bendersky's%20website_files/count.js"></script>
+
+</body></html>

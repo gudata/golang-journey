@@ -6,32 +6,42 @@
     - [Git](#git)
     - [Github](#github)
     - [Bash](#bash)
+      - [Fork bomb](#fork-bomb)
     - [Tools](#tools)
       - [asdf](#asdf)
       - [Just - the new make](#just---the-new-make)
     - [Docker](#docker)
     - [sqlite](#sqlite)
-    - [Mariadb / Postgresql](#mariadb--postgresql)
   - [Basic SDLC](#basic-sdlc)
     - [Testing](#testing)
     - [CI/CD process](#cicd-process)
   - [Golang](#golang)
     - [Installation](#installation)
     - [Golang Basics](#golang-basics)
-      - [Ranges and Slices](#ranges-and-slices)
+      - [Iterating](#iterating)
       - [Working with structs](#working-with-structs)
       - [Interfaces](#interfaces)
       - [Working with json \& files](#working-with-json--files)
+      - [Build a blockchain app](#build-a-blockchain-app)
     - [Golang Concurency](#golang-concurency)
-    - [Know your options](#know-your-options)
-    - [Databases](#databases)
+      - [Simple](#simple)
+      - [Practical Concurency](#practical-concurency)
+      - [BDD](#bdd)
+    - [Containers](#containers)
+      - [Postgresql](#postgresql)
   - [Web development](#web-development)
+    - [Expore GIN](#expore-gin)
+    - [Learn SQL](#learn-sql)
+    - [Learn about Forms](#learn-about-forms)
+    - [Databases](#databases)
+      - [Postgresql](#postgresql-1)
     - [Microservices](#microservices)
     - [Ataching the frontend](#ataching-the-frontend)
+    - [Know your options](#know-your-options)
     - [Sample frontend application](#sample-frontend-application)
   - [Packaging and deploy](#packaging-and-deploy)
   - [Building the CV](#building-the-cv)
-  - [Coursed to watch](#coursed-to-watch)
+  - [Resources: Coursed to watch \& Books to Read](#resources-coursed-to-watch--books-to-read)
 
 # Golang Course
 
@@ -90,7 +100,26 @@ For Ubuntu you will probably need those packages
   - https://github.com/denysdovhan/bash-handbook
   - https://github.com/dylanaraps/pure-bash-bible
 
-Get a fancy prompt with a lot of information https://starship.rs/ 
+Get a fancy prompt with a lot of information https://starship.rs/
+
+#### Fork bomb
+
+With this code you can test later the cgroups in docker by limiting the maximum number of processes for a given container. The example is from the "Containers From Scratch • Liz Rice • GOTO 2018"
+
+    :(){ :|:& };:
+
+Explanation:
+
+    : defines a shell function called : (colon).
+    (){ ... } is the function definition syntax in Bash.
+    : calls the function recursively.
+    | pipes the output of the function (which is itself) to another invocation of the function.
+    & runs the function in the background.
+    ; separates commands, and : at the end is the final invocation of the function to start the fork bomb.
+
+When you run this code, it creates an ever-increasing number of processes, leading to a system freeze if not stopped.
+
+Important Note: Fork bombs are dangerous and can potentially crash your system or make it unresponsive. They should only be used for educational purposes in a controlled environment and never in a real-world scenario or on a production system. Running such code on a live system can cause data loss and disrupt other users' activities. Always use caution and test code like this in isolated environments.
 
 
 ### Tools
@@ -209,12 +238,14 @@ Example usage:
 
 ### Docker
 
-  docker compose
+Install docker from the docker official website. Install both  docker and docker compose.
+Make sure you add your user into the docker group.
+
+    groups
+
+if you don't see the docker at your own groups, reboot the machine.
 
 ### sqlite
-
-### Mariadb / Postgresql
-
 
 
 ## Basic SDLC
@@ -238,6 +269,7 @@ Install with asdf
 language syntax, structs, "inheritance", composition
 
 Great Course in [Bulgarian language](https://www.youtube.com/watch?v=z57WKerNe9w)
+
 #### Iterating
 
 Create a function called "removeDuplicates" that takes a slice of integers as input and returns a new slice with duplicate values removed. The order of the elements in the resulting slice should be maintained.
@@ -357,6 +389,19 @@ Age: 25
 Email: johndoe@example.com
 
 
+#### Build a blockchain app
+
+Building Blockchain in Go
+
+- [Part 1: Basic Prototype](https://jeiwan.net/posts/building-blockchain-in-go-part-1/)
+- [Part 2: Proof of Work](https://jeiwan.net/posts/building-blockchain-in-go-part-2/)
+- [Part 3: Persistence and CLI](https://jeiwan.net/posts/building-blockchain-in-go-part-3/)
+- [Part 4: Transactions 1](https://jeiwan.net/posts/building-blockchain-in-go-part-4/)
+- [Part 5: Address](https://jeiwan.net/posts/building-blockchain-in-go-part-5/)
+- [Part 6: Transactions 2](https://jeiwan.net/posts/building-blockchain-in-go-part-6/)
+- [Part 7: Network](https://jeiwan.net/posts/building-blockchain-in-go-part-7/)
+
+
 ### Golang Concurency
 
 Sample program to do something in parallel. Not the focus of this course.
@@ -404,25 +449,120 @@ You can modify the "processFile" function to include more meaningful processing,
 The actual execution order and interleaving of the messages may vary due to the concurrent nature of goroutines.
 
 
-### Know your options
 
-multiplatform gui libs
-game development
+#### BDD
+Explain BDD, difference between TDD and BDD
 
-### Databases
+Try godog
 
-Work with SQL - models
-Work with ORM
+https://semaphoreci.com/community/tutorials/how-to-use-godog-for-behavior-driven-development-in-go
+
+
+### Containers
+
+Explain cgroups, containers, images and image repositories.
+
+[Tutorial for docker containers](https://www.youtube.com/watch?v=RqTEHSBrYFw)
+[Build containers from go](https://www.youtube.com/watch?v=8fi7uSYlOdc)
+
+Run the one of our previous projects into docker
+Run the  of our previous projects into docker
+
+
+
+#### Postgresql
+
+We will run postgres from a containers.
+
+https://hub.docker.com/_/postgres
+
 
 
 ## Web development
 
+
+Show developer tools
+
+Learn DNS - https://tryhackme.com/room/dnsindetail
+Learn HTTP - https://tryhackme.com/room/httpindetail
+Content Discovery - https://tryhackme.com/room/contentdiscovery
+
+Explain OSI model - https://www.imperva.com/learn/application-security/osi-model/
+
+
+### Expore GIN
+
+REST Servers in Go
+
+- [Part 1 - standard library](https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/)
+- [Part 2 - using a router package](https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/)
+- [Part 3 - using a web framework](https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/)
+- [Part 4 - using OpenAPI and Swagger](https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/)
+Learn how to generate code via OpenAPI
+- [Part 5 - middleware](https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/)
+- [Part 6 - authentication](https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/)
+- Optional: [Part 7 - GraphQL](https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/)
+
+
+### Learn SQL
+
+[SQL in 100 seconds](https://www.youtube.com/watch?v=zsjvFFKOm3c)
+
+What is database and schema.
+Classic SQL - CRUD
+[Modern SQL](https://modern-sql.com/)
+Database design,  [normalization forms](https://www.guru99.com/database-normalization.html)
+
+You should know how grouping work and doing aggregations.
+You should know the difference between [joins](https://sqlbolt.com/lesson/select_queries_with_joins), outer/left/inner/...and...there is one more new :)
+
+You could be asked to iterate recursevly on SQL https://learnsql.com/blog/do-it-in-sql-recursive-tree-traversal/
+
+### Learn about Forms
+
+Build Web Application with Golang
+
+https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/
+
+Take the parts for working with forms
+
+  https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/04.0.html
+  https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/04.1.html
+
+  Try SQLIte - https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/05.3.html
+
+### Databases
+
+#### Postgresql
+
+Start the postgres server from the docker conatiner and do
+
+Work with SQL - models:
+
+  https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/05.4.html
+
+
+Work with ORM
+
+  https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/05.5.html
+
+
 ### Microservices
+
 Simple microservice with own database with docker.
 
 ### Ataching the frontend
 
 Choose the web framework
+
+https://github.com/astaxie/beego
+
+
+### Know your options
+
+multiplatform gui libs
+game development
+
 
 ### Sample frontend application
 
@@ -436,8 +576,11 @@ capistrano ssh-something
 - write great introduction letter (optionally use chatgpt)
 - create a CV listing all projects
 
-## Coursed to watch & Books to Read
+## Resources: Coursed to watch & Books to Read
+
 Easy to read: Head First Design Patterns or the original "Design Patterns: Elements of Reusable Object-Oriented"
 Linux course
+
+Learn security https://tryhackme.com/dashboard
 
 [Learn Projects by example](https://github.com/practical-tutorials/project-based-learning#go)

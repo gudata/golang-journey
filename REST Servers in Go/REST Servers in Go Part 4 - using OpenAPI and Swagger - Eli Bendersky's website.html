@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:og="http://ogp.me/ns#" xmlns:fb="https://www.facebook.com/2008/fbml"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>REST Servers in Go: Part 4 - using OpenAPI and Swagger - Eli Bendersky's website</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://eli.thegreenplace.net/favicon.ico" rel="icon">
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.css" type="text/css">
+    <link href="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/font-awesome.min.css" rel="stylesheet">
+
+    <link href="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/vs.css" rel="stylesheet">
+    <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/style.css" type="text/css">
+
+        <link href="https://eli.thegreenplace.net/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Eli Bendersky's website ATOM Feed">
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://eli.thegreenplace.net/" class="navbar-brand">
+                <img src="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/logosmall.png" width="32" height="32">
+Eli Bendersky's website            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="https://eli.thegreenplace.net/pages/about">
+                        <i class="fa fa-question"></i>
+                        <span class="icon-label">About</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://eli.thegreenplace.net/archives/all">
+                        <i class="fa fa-th-list"></i>
+                        <span class="icon-label">Archives</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+
+<div class="container">
+    <div class="row">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/" rel="bookmark" title="Permalink to REST Servers in Go: Part 4 - using OpenAPI and Swagger">
+                        REST Servers in Go: Part 4 - using OpenAPI and Swagger
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="published">
+        <i class="fa fa-calendar"></i>
+        <time> February 06, 2021 at 06:00</time>
+    </span>
+<span class="label label-default">Tags</span>
+    <a href="https://eli.thegreenplace.net/tag/go">Go</a>
+        ,
+    <a href="https://eli.thegreenplace.net/tag/network-programming">Network Programming</a>
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>This is the fourth post in a series about writing REST servers in Go. Here is a
+list of posts in the series:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">Part 1 - standard library</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">Part 2 - using a router package</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/">Part 3 - using a web framework</a></li>
+<li>Part 4 - using OpenAPI and Swagger (this post)</li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/">Part 5 - middleware</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/">Part 6 - authentication</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/">Part 7 - GraphQL</a></li>
+</ul>
+<p>In this part I'll discuss how OpenAPI and Swagger can be used to define REST
+APIs in a standardized way and how to generate Go code from an OpenAPI
+specification.</p>
+<div class="section" id="motivating-problem">
+<h2>Motivating problem</h2>
+<p>In Part 1 of this series - when we were defining the REST API for our
+application - I noted that the API definition is somewhat ad-hoc, just a list of
+method/path pairs along with some comments:</p>
+<div class="highlight"><pre><span></span>POST   /task/              :  create a task, returns ID
+GET    /task/&lt;taskid&gt;      :  returns a single task by ID
+GET    /task/              :  returns all tasks
+DELETE /task/&lt;taskid&gt;      :  delete a task by ID
+GET    /tag/&lt;tagname&gt;      :  returns list of tasks with this tag
+GET    /due/&lt;yy&gt;/&lt;mm&gt;/&lt;dd&gt; :  returns list of tasks due by this date
+</pre></div>
+<p>Wouldn't it be nice it there was some standard way to describe the API? A
+standard means the description could serve as a contract between servers and
+clients. Moreover, a standard description would be immediately familiar to folks
+not intimately involved with the project. It could also be machine-readable,
+leading to all kinds of automation benefits.</p>
+</div>
+<div class="section" id="swagger-and-openapi">
+<h2>Swagger and OpenAPI</h2>
+<p><a class="reference external" href="https://en.wikipedia.org/wiki/Swagger_(software)">Swagger</a> was initially
+released in 2011 as an <a class="reference external" href="https://en.wikipedia.org/wiki/Interface_description_language">IDL</a> for describing
+REST APIs.</p>
+<img alt="Swagger logo" class="align-center" src="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/swagger-logo.png">
+<p>The original motivation for Swagger was auto-generating documentation for REST
+APIs, as well as trying out sample interactions with the API <a class="footnote-reference" href="#footnote-1" id="footnote-reference-1">[1]</a></p>
+<p>The year 2014 saw the release of version 2.0, and in 2016 a bunch of
+large companies in the industry teamed up to create OpenAPI - a more
+standardized version of Swagger, with version 3.0.</p>
+<p>The official website for all things Swagger and OpenAPI is <a class="reference external" href="https://swagger.io/">https://swagger.io</a>,
+supported by <a class="reference external" href="https://smartbear.com/">Smart Bear Software</a>.</p>
+<p>The nomenclature around this is slightly confusing, but the simplest way to
+remember is that OpenAPI is the current name of the specification, while Swagger
+typically refers to the tooling around it (though you may also hear "Swagger
+specification", especially when referring to versions earlier than 3.0).</p>
+</div>
+<div class="section" id="our-task-service-with-an-openapi-definition">
+<h2>Our task service with an OpenAPI definition</h2>
+<p>Let's start by repeating our favorite exercise of rewriting the task service,
+this time using OpenAPI and Swagger.</p>
+<p>To do this, I spent some time reading the OpenAPI 3.0 documentation and fired up
+<a class="reference external" href="https://editor.swagger.io/">Swagger Editor</a> to type in the specification as
+a YAML file. It took a while, and the final result is <a class="reference external" href="https://github.com/eliben/code-for-blog/blob/master/2021/go-rest-servers/swagger/task.yaml">this file</a>.</p>
+<p>For example, the following code snippet is the description of the <tt class="docutils literal">GET /task/</tt>
+request, which is supposed to return all tasks. In an OpenAPI spec we can
+specify an arbitrary number of <em>paths</em>, each with its different <em>methods</em> (GET,
+POST, etc.) and a description of its parameters and responses, along with JSON
+schemas.</p>
+<div class="highlight"><pre><span></span>/task:
+  get:
+    summary: Returns a list of all tasks
+    responses:
+      '200':
+        description: A JSON array of task IDs
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Task'
+</pre></div>
+<p>Where <tt class="docutils literal">components/schemas/Task</tt> is a reference to this definition of our
+<tt class="docutils literal">Task</tt> model:</p>
+<div class="highlight"><pre><span></span>components:
+  schemas:
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        due:
+          type: string
+          format: date-time
+</pre></div>
+<p>This is a description of a data <em>schema</em>; note that we can specify types for
+data fields, which (in theory, at least) could be helpful in auto-generating
+validators for this data.</p>
+<p>This effort has already produced a benefit - a nice, colorful documentation for
+our API:</p>
+<img alt="Swagger-generated documentation image for our REST API" class="align-center" src="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/go-rest-swagger-doc.png">
+<p>This is just a screenshot; the actual documentation is clickable and expandable,
+providing a clear description of request parameters, responses and their JSON
+schemas, etc.</p>
+<p>There's more, though. Assuming this API is hosted in a publicly-accessible
+server, we can interact with it straight from the Swagger Editor - just like
+hand-crafting <tt class="docutils literal">curl</tt> commands, but in an auto-generated schema-aware way.</p>
+<p>Imagine you've developed this task API and now want to publish it for use in
+various clients (web, mobile, etc.); if your API is specified with
+OpenAPI/Swagger, you get automatic documentation and an interface for clients to
+experiment with the API. This is doubly important when you have API consumers
+who aren't SW engineers - for example, this could be UX designers, technical
+documentation writers and product managers who need to understand an API but may
+be less comfortable throwing scripts together.</p>
+<p>Moreover, OpenAPI standardizes things like authorization, which could also be
+very useful when compared with an ad-hoc description.</p>
+<p>There are additional tools available once you have a spec - e.g. <a class="reference external" href="https://swagger.io/tools/swagger-ui/">Swagger UI</a> and <a class="reference external" href="https://swagger.io/tools/swagger-inspector/">Swagger Inspector</a>. You can even use the spec to
+help integrate your REST server into your cloud provider's infrastructure; for
+example, GCP has <a class="reference external" href="https://cloud.google.com/endpoints/docs/openapi">Cloud Endpoints for OpenAPI</a> for setting up monitoring,
+analysis and other features for published APIs; the API is described to the tool
+using OpenAPI.</p>
+</div>
+<div class="section" id="auto-generating-a-go-server-scaffold">
+<h2>Auto-generating a Go server scaffold</h2>
+<p>The promise of OpenAPI/Swagger goes beyond documentation; we can also generate
+server and client code from it.</p>
+<p>I followed the official instructions of the <a class="reference external" href="https://github.com/swagger-api/swagger-codegen">Swagger codegen project</a> to generate the skeleton of
+a Go server. I then filled in the handlers to implement our task server. It's
+<a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/swagger">available here</a>,
+with the steps I used written down in the README file in that directory. This
+server now passes all our automated tests.</p>
+<p>The generated code uses <tt class="docutils literal">gorilla/mux</tt> for routing (similarly to our approach
+in <a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">part 2</a>)
+and creates placeholder handlers in a file named <tt class="docutils literal">api_default.go</tt>. I've placed
+the by-now familiar task logic into these handlers; for example:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">TaskIdDelete</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strconv</span><span class="p">.</span><span class="nx">Atoi</span><span class="p">(</span><span class="nx">mux</span><span class="p">.</span><span class="nx">Vars</span><span class="p">(</span><span class="nx">r</span><span class="p">)[</span><span class="s">"id"</span><span class="p">])</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusBadRequest</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">err</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">store</span><span class="p">.</span><span class="nx">DeleteTask</span><span class="p">(</span><span class="nx">id</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusNotFound</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>While working on this, I've collected a few notes on the limitations of this
+approach:</p>
+<ul class="simple">
+<li>The generated code's package naming / imports didn't work well out of the
+box, at least not with Go modules. I had to restructure it quite a bit.</li>
+<li>Some of the generated files didn't comply with <tt class="docutils literal">gofmt</tt> formatting for some
+reason.</li>
+<li>The code forces globals in the server; whereas in the previous parts we've
+always had a server struct whose methods were registered as handlers (and
+therefore the struct instance's fields served as shared data), in the
+server generated by Swagger the handlers are top-level functions.</li>
+<li>Even though my OpenAPI definition has a schema forcing integer values on
+certain path parameters (such as day, month year in the <tt class="docutils literal">due/</tt> path),
+the generated server had no validation for that. Moreover, although
+<tt class="docutils literal">gorilla/mux</tt> supports regexps in path parameters, the generated code didn't
+even use that. The result: I had to write parameter validation manually again.</li>
+</ul>
+<p>Overall, the advantages of auto-generating the server code seem dubious to me.
+The amount of time it saves is fairly small, considering that I had to rewrite a
+bunch of the code anyway. Furthermore, since I don't use the generated scaffold
+as-is, all the saved time only applies <em>the first time</em>. If I now change the
+OpenAPI definition, I can't just ask the code generator to update my server -
+they've already diverged.</p>
+<p>The <cite>swagger-codegen</cite> tool can also generate <em>clients</em>, including for Go. This
+can be useful in some cases, though I found the client code generated by it
+somewhat convoluted. As before, it could probably serve as a good starting point
+for writing your own client, but unlikely to be part of a continuous workflow.</p>
+</div>
+<div class="section" id="trying-alternative-code-generators">
+<h2>Trying alternative code generators</h2>
+<p>OpenAPI specs are written in YAML (or JSON) and have a well-documented format.
+Therefore, it's hardly surprising that there's more than a single tool available
+to generate server code from a spec. In the previous section I've covered using
+the "official" Swagger code generator, but there are many more!</p>
+<p>For Go, a popular generator is <a class="reference external" href="https://github.com/go-swagger/go-swagger">go-swagger</a>. Its README has this section:</p>
+<blockquote>
+<p><strong>How is this different from go generator in swagger-codegen?</strong></p>
+<p>tl;dr The main difference at this moment is that this one actually works...</p>
+<p>The swagger-codegen project only generates a workable go client and even
+there it will only support flat models. Further, the go server generated by
+swagger-codegen is mostly a stub.</p>
+</blockquote>
+<p>I tried generating a server with <tt class="docutils literal"><span class="pre">go-swagger</span></tt>. Since the code it generates is
+quite large, I won't link to it; but I'll share my impressions.</p>
+<p>First of all, <tt class="docutils literal"><span class="pre">go-swagger</span></tt> only supports Swagger spec 2.0, not the newest
+version 3.0 of OpenAPI. This is rather unfortunate, but I found an
+<a class="reference external" href="https://lucybot-inc.github.io/api-spec-converter/">online tool</a>
+that converts from one to the other, and a version 2.0 of the spec can also be
+found in <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/swagger">the repository</a>.</p>
+<p>The server generated by <tt class="docutils literal"><span class="pre">go-swagger</span></tt> is certainly more feature-ful than the
+one generated by <tt class="docutils literal"><span class="pre">swagger-codegen</span></tt>, but it comes at a cost. This essentially
+ties you into the specific framework designed by the <tt class="docutils literal"><span class="pre">go-swagger</span></tt> maintainers.
+The generated code has many dependencies on packages in the
+<a class="reference external" href="https://github.com/go-openapi/">https://github.com/go-openapi/</a> organization, and uses code from these packages
+extensively to set up and run the server. You even get custom flag parsing
+packages - because... why not?</p>
+<p>If you love the framework used therein, that could be a good thing. But if you
+have your own ideas in mind - like using Gin or some custom router, it's not
+very helpful that the generated code is so opinionated.</p>
+<p><tt class="docutils literal"><span class="pre">go-swagger</span></tt> can also generate a client for you, which is similarly full
+featured and opinionated. This may be less of a problem if you need to quickly
+generate some client code for testing, though.</p>
+<p><em>Update 2021-02-27</em>: Following a reader suggestion, I tried yet another code
+generation tool - <a class="reference external" href="https://github.com/deepmap/oapi-codegen">oapi-codegen</a>, and
+the task server generated using this tool can be <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/swagger/oapi-server">found here</a>.</p>
+<p>I have to admit I like what <tt class="docutils literal"><span class="pre">oapi-codegen</span></tt> is doing much more than the other
+options tried earlier. The code it generates is simple, clean and easy to
+split intto the generated part vs. custom code. It even accepts OpenAPI v3! The
+<a class="reference external" href="https://github.com/deepmap/oapi-codegen/issues/303">only complaint I have</a> is
+that it pulls a dependency on a 3rd-party package just to implement binding of
+request parameters, and this is something I'd prefer to be more configurable;
+e.g. a setting where I could choose to inline just the right binding code
+instead of bringing in a dependency.</p>
+</div>
+<div class="section" id="generating-specs-from-code">
+<h2>Generating specs from code</h2>
+<p>What if you already have your REST server implemented, but really like the idea
+of an OpenAPI spec for it; in this case, is it possible to generate a spec from
+your server code?</p>
+<p>Yes! Using special comment annotations and tools like <a class="reference external" href="https://github.com/swaggo/swag">swaggo/swag</a>, the spec (unfortunately only version 2.0,
+again) will be generated for you. You can then feed this spec into other Swagger
+tooling for all your documentation needs.</p>
+<p>In fact, this seems like a particularly attractive option if you have your own
+way of writing REST servers and don't want to commit to a new framework just
+for the purpose of using Swagger.</p>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion?</h2>
+<p>Imagine that you have an application that has to consume a REST API, and there
+are two services competing for your attention:</p>
+<ul class="simple">
+<li>Service 1 has an ad-hoc description of its API in a text file, with some
+sample <tt class="docutils literal">curl</tt> commands to interact with it.</li>
+<li>Service 2 has an OpenAPI spec, with nice and standard-looking documentation
+and tooling to try it out online without having to open the terminal.</li>
+</ul>
+<p>Assuming all other parameters are equal, which API would you choose to try out
+first? IMHO the benefits of OpenAPI for documentation and as a standardized
+contracts between REST servers and clients is obvious. What's less obvious is
+the extent to which we should be taking our use of Swagger tooling.</p>
+<p>I'd gladly describe my API with OpenAPI and use the documentation tooling, but
+I'd also be more cautious when it comes to generating code. Personally I'd
+prefer more control over my server code - what dependencies it has and how it's
+structured. While I see value in generating server code for quick prototyping
+and experimentation, I wouldn't use an auto-generated server as the basis of
+my actual implementation <a class="footnote-reference" href="#footnote-2" id="footnote-reference-2">[2]</a>.</p>
+<p>In fact, tools like <tt class="docutils literal">swaggo/swag</tt> may offer the perfect balance here. You
+write your server code using whatever framework/technique you like, and add
+magic comments to describe your REST API. The tool then generates the OpenAPI
+spec from these comments, and you can generate documentation or anything else
+from that spec. There's the added benefit of keeping the spec source of truth
+(the magic comments) as close as possible to the source code implementing it -
+always a good practice in SW engineering.</p>
+<hr class="docutils">
+<table class="docutils footnote" frame="void" id="footnote-1" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-1">[1]</a></td><td>Recall the description of the <a class="reference external" href="https://github.com/eliben/code-for-blog/blob/master/2021/go-rest-servers/testing/manual.sh">manual.sh script</a>
+from Part 1. This script contains a collection of <tt class="docutils literal">curl</tt> commands to
+interact with our server. It's clear that such commands can be
+auto-generated from a standardized description of the REST API, saving
+lots of work.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="footnote-2" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-2">[2]</a></td><td>Of course, my inclination could be different if my job was to churn out
+a new REST server every Thursday. Always keep <a class="reference external" href="https://eli.thegreenplace.net/2017/benefits-of-dependencies-in-software-projects-as-a-function-of-effort/">Benefits of dependencies in
+software projects as a function of effort</a>
+in mind.</td></tr>
+</tbody>
+</table>
+</div>
+
+            </div>
+            <!-- /.entry-content -->
+<hr>
+<div class="dotted-links">
+<p class="align-center">
+For comments, please send me
+<a href="mailto:eliben@gmail.com"><i class="fa fa-envelope-o"></i> an email</a>.
+</p>
+</div>        </article>
+    </section>
+
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">
+            © 2003-2023 Eli Bendersky
+         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/jquery-2.2.4.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.js"></script>
+
+<!--
+  Using goatcounter to count visitors. The count.js script is vendored in.
+-->
+<script data-goatcounter="https://stats.thegreenplace.net/count" async="" src="REST%20Servers%20in%20Go%20Part%204%20-%20using%20OpenAPI%20and%20Swagger%20-%20Eli%20Bendersky's%20website_files/count.js"></script>
+
+</body></html>

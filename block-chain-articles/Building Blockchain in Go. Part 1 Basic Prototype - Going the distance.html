@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.97.3">
+
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Ivan Kuznetsov">
+  <meta property="og:url" content="https://jeiwan.net/posts/building-blockchain-in-go-part-1/">
+
+  <title>Building Blockchain in Go. Part 1: Basic Prototype - Going the distance</title>
+  <meta property="og:title" content="Building Blockchain in Go. Part 1: Basic Prototype - Going the distance">
+  <meta property="og:type" content="article">
+  <meta name="description" content="A blog about blockchains and smart contracts development">
+  <meta name="keywords" content="bitcoin, ethereum, evm, smart contract, blockchain, programming, development, solidity, vyper">
+
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%201%20Basic%20Prototype%20-%20Going%20the%20distance_files/css.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%201%20Basic%20Prototype%20-%20Going%20the%20distance_files/prism.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%201%20Basic%20Prototype%20-%20Going%20the%20distance_files/journal.css">
+  <link href="https://jeiwan.net/index.xml" rel="alternate" type="application/rss+xml" title="Going the distance">
+
+  
+
+  
+
+</head>
+
+<body>
+  <div class="container">
+
+    <nav class="site-nav">
+      <a href="https://jeiwan.net/">Index</a>
+    </nav>
+
+
+<article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Building Blockchain in Go. Part 1: Basic Prototype</h1>
+    <time class="post-date" datetime=" 2017-08-16 12:29:11 +07">16 Aug 2017</time>
+  </header>
+
+  <blockquote>
+<p>Chinese translations: <a href="https://github.com/liuchengxu/blockchain-tutorial/blob/master/content/part-1/basic-prototype.md">by liuchengxu</a>, <a href="https://zhangli1.gitbooks.io/dummies-for-blockchain/content/">by zhangli1</a>.</p>
+</blockquote>
+<h2 id="introduction">Introduction</h2>
+<p>Blockchain is one of the most revolutionary technologies of the 21st 
+century, which is still maturing and which potential is not fully 
+realized yet. In its essence, blockchain is just a distributed database 
+of records. But what makes it unique is that it’s not a private 
+database, but a public one, i.e. everyone who uses it has a full or 
+partial copy of it. And a new record can be added only with a consent of
+ other keepers of the database. Also, it’s blockchain that made 
+cryptocurrencies and smart contracts possible.</p>
+<p>In this series of articles we’ll build a simplified cryptocurrency that’s based on a simple blockchain implementation.</p>
+<h2 id="block">Block</h2>
+<p>Let’s start with the “block” part of “blockchain”. In blockchain it’s
+ blocks that store valuable information. For example, bitcoin blocks 
+store transactions, the essence of any cryptocurrency. Besides this, a 
+block contains some technical information, like its version, current 
+timestamp and the hash of the previous block.<br>
+In this article we’re not going to implement the block as it’s described
+ in blockchain or Bitcoin specifications, instead we’ll use a simplified
+ version of it, which contains only significant information. Here’s what
+ it looks like:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> Block <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	Timestamp     <span class="token builtin">int64</span>
+	Data          <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	PrevBlockHash <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	Hash          <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p><code>Timestamp</code> is the current timestamp (when the block is created), <code>Data</code> is the actual valuable information containing in the block, <code>PrevBlockHash</code> stores the hash of the previous block, and <code>Hash</code> is the hash of the block. In Bitcoint specification <code>Timestamp</code>, <code>PrevBlockHash</code>, and <code>Hash</code> are block headers, which form a separate data structure, and transactions (<code>Data</code> in our case) is a separate data structure. So we’re mixing them here for simplicity.</p>
+<p>So how do we calculate the hashes? The way hashes are calculates is 
+very important feature of blockchain, and it’s this feature that makes 
+blockchain secure. The thing is that calculating a hash is a 
+computationally difficult operation, it takes some time even on fast 
+computers (that’s why people buy powerful GPUs to mine Bitcoin). This is
+ an intentional architectural design, which makes adding new blocks 
+difficult, thus preventing their modification after they’re added. We’ll
+ discuss and implement this mechanism in a future article.</p>
+<p>For now, we’ll just take block fields, concatenate them, and 
+calculate a SHA-256 hash on the concatenated combination. Let’s do this 
+in <code>SetHash</code> method:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>b <span class="token operator">*</span>Block<span class="token punctuation">)</span> <span class="token function">SetHash</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	timestamp <span class="token operator">:=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token function">byte</span><span class="token punctuation">(</span>strconv<span class="token punctuation">.</span><span class="token function">FormatInt</span><span class="token punctuation">(</span>b<span class="token punctuation">.</span>Timestamp<span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+	headers <span class="token operator">:=</span> bytes<span class="token punctuation">.</span><span class="token function">Join</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span>b<span class="token punctuation">.</span>PrevBlockHash<span class="token punctuation">,</span> b<span class="token punctuation">.</span>Data<span class="token punctuation">,</span> timestamp<span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+	hash <span class="token operator">:=</span> sha256<span class="token punctuation">.</span><span class="token function">Sum256</span><span class="token punctuation">(</span>headers<span class="token punctuation">)</span>
+
+	b<span class="token punctuation">.</span>Hash <span class="token operator">=</span> hash<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Next, following a Golang convention, we’ll implement a function that’ll simplify the creation of a block:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">NewBlock</span><span class="token punctuation">(</span>data <span class="token builtin">string</span><span class="token punctuation">,</span> prevBlockHash <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">)</span> <span class="token operator">*</span>Block <span class="token punctuation">{</span>
+	block <span class="token operator">:=</span> <span class="token operator">&amp;</span>Block<span class="token punctuation">{</span>time<span class="token punctuation">.</span><span class="token function">Now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">Unix</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token function">byte</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">,</span> prevBlockHash<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">}</span>
+	block<span class="token punctuation">.</span><span class="token function">SetHash</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token keyword">return</span> block
+<span class="token punctuation">}</span>
+</code></pre></div><p>And that’s it for the block!</p>
+<h2 id="blockchain">Blockchain</h2>
+<p>Now let’s implement a blockchain. In its essence blockchain is just a
+ database with certain structure: it’s an ordered, back-linked list. 
+Which means that blocks are stored in the insertion order and that each 
+block is linked to the previous one. This structure allows to quickly 
+get the latest block in a chain and to (efficiently) get a block by its 
+hash.</p>
+<p>In Golang this structure can be implemented by using an array and a 
+map: the array would keep ordered hashes (arrays are ordered in Go), and
+ the map would keep <code>hash → block</code> pairs (maps are 
+unordered). But for our blockchain prototype we’ll just use an array, 
+because we don’t need to get blocks by their hash for now.</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> Blockchain <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	blocks <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Block
+<span class="token punctuation">}</span>
+</code></pre></div><p>This is our first blockchain! I’ve never thought it would be so easy 😉</p>
+<p>Now let’s make it possible to add blocks to it:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token function">AddBlock</span><span class="token punctuation">(</span>data <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	prevBlock <span class="token operator">:=</span> bc<span class="token punctuation">.</span>blocks<span class="token punctuation">[</span><span class="token function">len</span><span class="token punctuation">(</span>bc<span class="token punctuation">.</span>blocks<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span>
+	newBlock <span class="token operator">:=</span> <span class="token function">NewBlock</span><span class="token punctuation">(</span>data<span class="token punctuation">,</span> prevBlock<span class="token punctuation">.</span>Hash<span class="token punctuation">)</span>
+	bc<span class="token punctuation">.</span>blocks <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>bc<span class="token punctuation">.</span>blocks<span class="token punctuation">,</span> newBlock<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>That’s it! Or not?..</p>
+<p>To add a new block we need an existing block, but there’re not blocks
+ in our blockchain! So, in any blockchain, there must be at least one 
+block, and such block, the first in the chain, is called <strong>genesis block</strong>. Let’s implement a method that creates such a block:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">NewGenesisBlock</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">*</span>Block <span class="token punctuation">{</span>
+	<span class="token keyword">return</span> <span class="token function">NewBlock</span><span class="token punctuation">(</span><span class="token string">"Genesis Block"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Now, we can implement a function that creates a blockchain with the genesis block:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">NewBlockchain</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">*</span>Blockchain <span class="token punctuation">{</span>
+	<span class="token keyword">return</span> <span class="token operator">&amp;</span>Blockchain<span class="token punctuation">{</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Block<span class="token punctuation">{</span><span class="token function">NewGenesisBlock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Let’s check that the blockchain works correctly:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	bc <span class="token operator">:=</span> <span class="token function">NewBlockchain</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+	bc<span class="token punctuation">.</span><span class="token function">AddBlock</span><span class="token punctuation">(</span><span class="token string">"Send 1 BTC to Ivan"</span><span class="token punctuation">)</span>
+	bc<span class="token punctuation">.</span><span class="token function">AddBlock</span><span class="token punctuation">(</span><span class="token string">"Send 2 more BTC to Ivan"</span><span class="token punctuation">)</span>
+
+	<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> block <span class="token operator">:=</span> <span class="token keyword">range</span> bc<span class="token punctuation">.</span>blocks <span class="token punctuation">{</span>
+		fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Prev. hash: %x\n"</span><span class="token punctuation">,</span> block<span class="token punctuation">.</span>PrevBlockHash<span class="token punctuation">)</span>
+		fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Data: %s\n"</span><span class="token punctuation">,</span> block<span class="token punctuation">.</span>Data<span class="token punctuation">)</span>
+		fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Hash: %x\n"</span><span class="token punctuation">,</span> block<span class="token punctuation">.</span>Hash<span class="token punctuation">)</span>
+		fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Output:</p>
+<pre tabindex="0"><code>Prev. hash:
+Data: Genesis Block
+Hash: aff955a50dc6cd2abfe81b8849eab15f99ed1dc333d38487024223b5fe0f1168
+
+Prev. hash: aff955a50dc6cd2abfe81b8849eab15f99ed1dc333d38487024223b5fe0f1168
+Data: Send 1 BTC to Ivan
+Hash: d75ce22a840abb9b4e8fc3b60767c4ba3f46a0432d3ea15b71aef9fde6a314e1
+
+Prev. hash: d75ce22a840abb9b4e8fc3b60767c4ba3f46a0432d3ea15b71aef9fde6a314e1
+Data: Send 2 more BTC to Ivan
+Hash: 561237522bb7fcfbccbc6fe0e98bbbde7427ffe01c6fb223f7562288ca2295d1
+</code></pre><p>That’s it!</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>We built a very simple blockchain prototype: it’s just an array of 
+blocks, with each block having a connection to the previous one. The 
+actual blockchain is much more complex though. In our blockchain adding 
+new blocks is easy and fast, but in real blockchain adding new blocks 
+requires some work: one has to perform some heavy computations before 
+getting a permission to add block (this mechanism is called 
+Proof-of-Work). Also, blockchain is a distributed database that has no 
+single decision maker. Thus, a new block must be confirmed and approved 
+by other participants of the network (this mechanism is called 
+consensus). And there’re no transactions in our blockchain yet!</p>
+<p>In future articles we’ll cover each of these features.</p>
+<hr>
+<p>Links:</p>
+<ol>
+<li>Full source codes: <a href="https://github.com/Jeiwan/blockchain_go/tree/part_1">https://github.com/Jeiwan/blockchain_go/tree/part_1</a></li>
+<li>Block hashing algorithm: <a href="https://en.bitcoin.it/wiki/Block_hashing_algorithm">https://en.bitcoin.it/wiki/Block_hashing_algorithm</a></li>
+</ol>
+
+
+</article>
+
+<hr>
+<br>
+
+
+
+
+
+
+      <footer class="site-footer">
+        <span itemscope="" itemtype="http://schema.org/Person">
+          <link itemprop="url" href="https://jeiwan.net/">
+
+          Author:
+          <span itemprop="name">Ivan Kuznetsov</span>
+
+          <br>
+
+          Get in touch:
+
+          <a itemprop="sameAs" href="mailto:me@jeiwan.ru" target="_blank">E-mail</a>
+
+          <a itemprop="sameAs" href="https://t.me/jeiwan" title="Telegram" target="_blank">Telegram</a>
+
+          <a itemprop="sameAs" href="https://twitter.com/jeiwan7" title="Twitter" target="_blank">Twitter</a>
+
+          <a itemprop="sameAs" href="https://github.com/jeiwan" title="GitHub" target="_blank">GitHub</a>
+
+          
+        </span>
+
+        <br><br>
+
+        <div style="text-align:center">
+          <small>
+            <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="Building%20Blockchain%20in%20Go.%20Part%201%20Basic%20Prototype%20-%20Going%20the%20distance_files/88x31.png"></a><br>Content of this site is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
+          </small>
+        </div>
+
+        
+      </footer>
+    </div>
+
+  
+
+    <script src="Building%20Blockchain%20in%20Go.%20Part%201%20Basic%20Prototype%20-%20Going%20the%20distance_files/prism.js"></script>
+
+  
+
+</body></html>

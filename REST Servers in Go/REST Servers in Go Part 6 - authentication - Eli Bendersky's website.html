@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:og="http://ogp.me/ns#" xmlns:fb="https://www.facebook.com/2008/fbml"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>REST Servers in Go: Part 6 - authentication - Eli Bendersky's website</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://eli.thegreenplace.net/favicon.ico" rel="icon">
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.css" type="text/css">
+    <link href="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/font-awesome.min.css" rel="stylesheet">
+
+    <link href="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/vs.css" rel="stylesheet">
+    <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/style.css" type="text/css">
+
+        <link href="https://eli.thegreenplace.net/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Eli Bendersky's website ATOM Feed">
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://eli.thegreenplace.net/" class="navbar-brand">
+                <img src="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/logosmall.png" width="32" height="32">
+Eli Bendersky's website            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="https://eli.thegreenplace.net/pages/about">
+                        <i class="fa fa-question"></i>
+                        <span class="icon-label">About</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://eli.thegreenplace.net/archives/all">
+                        <i class="fa fa-th-list"></i>
+                        <span class="icon-label">Archives</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+
+<div class="container">
+    <div class="row">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/" rel="bookmark" title="Permalink to REST Servers in Go: Part 6 - authentication">
+                        REST Servers in Go: Part 6 - authentication
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="published">
+        <i class="fa fa-calendar"></i>
+        <time> May 13, 2021 at 20:26</time>
+    </span>
+<span class="label label-default">Tags</span>
+    <a href="https://eli.thegreenplace.net/tag/go">Go</a>
+        ,
+    <a href="https://eli.thegreenplace.net/tag/network-programming">Network Programming</a>
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>This is the sixth post in a series about writing REST servers in Go. Here is
+a list of posts in the series:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">Part 1 - standard library</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">Part 2 - using a router package</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/">Part 3 - using a web framework</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/">Part 4 - using OpenAPI and Swagger</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/">Part 5 - middleware</a></li>
+<li>Part 6 - authentication (this post)</li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/">Part 7 - GraphQL</a></li>
+</ul>
+<p>In this part we're going to be talking about <em>authentication</em> and security in
+general. In previous parts, if our task server was deployed publicly, its full
+API would have been accessible to anyone with an internet connection. While
+this is appropriate for some REST servers, it's not always what we want.
+Typically, at least parts of the API should be private/protected so that only
+authenticated users can access them.</p>
+<div class="section" id="authentication-vs-authorization">
+<h2>Authentication vs. Authorization</h2>
+<p>When we talk about "auth" in general, this can mean one of two things:</p>
+<ol class="arabic simple">
+<li>Authentication (<em>authn</em>) - providing access to the API only for
+registered/known users.</li>
+<li>Authorization (<em>authz</em>) - the permissions different users have on the server.</li>
+</ol>
+<p>To distinguish between the two, an analogy I like is the common Unix-style
+file system. Authentication is logging into the system with your username and
+password. Authorization is the read-write-execute access bits on specific files
+and directories: some files are private to specific users, some are visible to
+whole groups, all the while "root" users exist with access to everything.</p>
+<p>In this post we'll be focusing on authentication, because it's the more
+fundamental concept and a prerequisite for authorization. Once our server
+implements authentication, adding authorization is typically straightforward,
+but also very use-case specific.</p>
+</div>
+<div class="section" id="https-tls-is-the-foundation">
+<h2>HTTPS/TLS is the foundation</h2>
+<p>However you choose to do authentication on the internet these days, TLS should
+be the foundation you build upon. If you only remember one point from this
+article - this should be it. TLS is the bedrock of public internet security, and
+it's chiseled by a long history of counter-measures for real and potential
+threats. Never, ever roll your own crypto.</p>
+<p>For REST servers over HTTP like our sample task server in this series, HTTPS is
+the transport protocol to use. For a basic exploration of adding HTTPS support
+for Go servers, please read <a class="reference external" href="https://eli.thegreenplace.net/2021/go-https-servers-with-tls/">my earlier post</a>.</p>
+</div>
+<div class="section" id="http-basic-access-authentication-over-https">
+<h2>HTTP basic access authentication over HTTPS</h2>
+<p>HTTP had a "basic" authentication scheme for a long time; the latest RFC
+describing it is <a class="reference external" href="https://tools.ietf.org/html/rfc7617">RFC 7617</a>. Used on its
+own, basic auth is a big no-no because it ships username/password pairs over the
+wire in plaintext (very thinly veiled in base64 encoding).</p>
+<p>These days however, when used over HTTPS, basic auth should be safe <a class="footnote-reference" href="#footnote-1" id="footnote-reference-1">[1]</a>. Once an
+HTTPS connection is established, all the data passing between servers and
+clients is secured by military-grade crypto, and there's no need to add
+additional layers of security. Over-complicating the system can make it <em>more</em>,
+not less vulnerable to attack.</p>
+<p>Basic auth really is simple: if an unauthenticated HTTP request is made to the
+server, the server adds a special header to its response: <tt class="docutils literal"><span class="pre">WWW-Authenticate</span></tt>.
+The client can then send another request, properly authenticated, by adding
+an <tt class="docutils literal">Authorization</tt> header.</p>
+<p>Let's get right <a class="reference external" href="https://github.com/eliben/code-for-blog/blob/master/2021/go-rest-servers/auth/basic-sample/https-basic-auth-server.go">to the code</a>.
+Here's a simple Go HTTPS server that protects access to the <tt class="docutils literal">secret/</tt> path
+with basic auth:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">addr</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"addr"</span><span class="p">,</span><span class="w"> </span><span class="s">":4000"</span><span class="p">,</span><span class="w"> </span><span class="s">"HTTPS network address"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">certFile</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"certfile"</span><span class="p">,</span><span class="w"> </span><span class="s">"cert.pem"</span><span class="p">,</span><span class="w"> </span><span class="s">"certificate PEM file"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">keyFile</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"keyfile"</span><span class="p">,</span><span class="w"> </span><span class="s">"key.pem"</span><span class="p">,</span><span class="w"> </span><span class="s">"key PEM file"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">flag</span><span class="p">.</span><span class="nx">Parse</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/"</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">"/"</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">)</span><span class="w"></span>
+<span class="w">      </span><span class="k">return</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">"Proudly served with Go and HTTPS!\n"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">})</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/secret/"</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="nx">pass</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">BasicAuth</span><span class="p">()</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">verifyUserPass</span><span class="p">(</span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="nx">pass</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">"You get to see the secret\n"</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">w</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">"WWW-Authenticate"</span><span class="p">,</span><span class="w"> </span><span class="s">`Basic realm="api"`</span><span class="p">)</span><span class="w"></span>
+<span class="w">      </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">"Unauthorized"</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusUnauthorized</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="p">})</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">srv</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">Addr</span><span class="p">:</span><span class="w">    </span><span class="o">*</span><span class="nx">addr</span><span class="p">,</span><span class="w"></span>
+<span class="w">    </span><span class="nx">Handler</span><span class="p">:</span><span class="w"> </span><span class="nx">mux</span><span class="p">,</span><span class="w"></span>
+<span class="w">    </span><span class="nx">TLSConfig</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">MinVersion</span><span class="p">:</span><span class="w">               </span><span class="nx">tls</span><span class="p">.</span><span class="nx">VersionTLS13</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="nx">PreferServerCipherSuites</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"></span>
+<span class="w">    </span><span class="p">},</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">"Starting server on %s"</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="nx">addr</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">ListenAndServeTLS</span><span class="p">(</span><span class="o">*</span><span class="nx">certFile</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="nx">keyFile</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>If the certificate / TLS setup is not clear, please go back and read the post on
+<a class="reference external" href="https://eli.thegreenplace.net/2021/go-https-servers-with-tls/">HTTPS servers in Go</a>. Here I'll
+focus just on the handler for the <tt class="docutils literal">secret/</tt> path:</p>
+<div class="highlight"><pre><span></span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/secret/"</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="nx">pass</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">BasicAuth</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">verifyUserPass</span><span class="p">(</span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="nx">pass</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">"You get to see the secret\n"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">w</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">"WWW-Authenticate"</span><span class="p">,</span><span class="w"> </span><span class="s">`Basic realm="api"`</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">"Unauthorized"</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusUnauthorized</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="p">})</span><span class="w"></span>
+</pre></div>
+<p>Go's <tt class="docutils literal">net/http</tt> supports basic auth natively and parses the appropriate
+header in the request; it extracts the username and password and makes them
+available with the <tt class="docutils literal">BasicAuth</tt> method. We'll take a look at <tt class="docutils literal">verifyUserPass</tt>
+shortly, but let's first understand what the server does if the user cannot be
+verified. It returns an error response with the HTTP "unauthorized" code (401).
+It sets the <tt class="docutils literal"><span class="pre">WWW-Authenticate</span></tt> header of this response to say it uses basic
+authentication, in the realm "api". The realm is arbitrary and can be chosen by
+the server - it's supposed to be a description of what kind of authorization is
+required if a server has several different security domains. Its value has no
+meaning at this level of the protocol - it's an implicit understanding between
+the server and client.</p>
+<p>Here is the <tt class="docutils literal">verifyUserPass</tt> function. All it does is emulate
+username/password verification for two known users:</p>
+<div class="highlight"><pre><span></span><span class="kd">var</span><span class="w"> </span><span class="nx">usersPasswords</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">][]</span><span class="kt">byte</span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="s">"joe"</span><span class="p">:</span><span class="w">  </span><span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">"$2a$12$aMfFQpGSiPiYkekov7LOsu63pZFaWzmlfm1T8lvG6JFj2Bh4SZPWS"</span><span class="p">),</span><span class="w"></span>
+<span class="w">  </span><span class="s">"mary"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">"$2a$12$l398tX477zeEBP6Se0mAv.ZLR8.LZZehuDgbtw2yoQeMjIyCNCsRW"</span><span class="p">),</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+
+<span class="c1">// verifyUserPass verifies that username/password is a valid pair matching</span><span class="w"></span>
+<span class="c1">// our userPasswords "database".</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">verifyUserPass</span><span class="p">(</span><span class="nx">username</span><span class="p">,</span><span class="w"> </span><span class="nx">password</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">wantPass</span><span class="p">,</span><span class="w"> </span><span class="nx">hasUser</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">usersPasswords</span><span class="p">[</span><span class="nx">username</span><span class="p">]</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">!</span><span class="nx">hasUser</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">false</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">cmperr</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">bcrypt</span><span class="p">.</span><span class="nx">CompareHashAndPassword</span><span class="p">(</span><span class="nx">wantPass</span><span class="p">,</span><span class="w"> </span><span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">password</span><span class="p">));</span><span class="w"> </span><span class="nx">cmperr</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="kc">false</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>The <tt class="docutils literal">usersPasswords</tt> map would be some sort of database table in a real
+server. The critical part to pay attention to here is the usage of the
+<tt class="docutils literal">bcrypt</tt> package to hash the passwords. <em>Never store passwords in plaintext</em>;
+some kind of hash should always be used, to reduce the catastrophe of a data
+leak where the database becomes accessible to an attacker. <a class="reference external" href="https://en.wikipedia.org/wiki/Bcrypt">bcrypt</a> is a clever scheme that provides
+several protections:</p>
+<ul class="simple">
+<li>It's resistant to timing attacks (where an attacker may gain information about
+the password from carefully calculating how long it takes to verify a
+password).</li>
+<li>It has <a class="reference external" href="https://en.wikipedia.org/wiki/Salt_(cryptography)">salting</a> to
+protect against brute-force attacks with rainbow tables.</li>
+<li>It is slow by design, making brute-force attacks harder in general.</li>
+</ul>
+<p>Presumably, a user signs up for your service (or obtains a username / password
+pair in some other way). At that point the bcrypt-ed hash of the password is
+<a class="reference external" href="https://pkg.go.dev/golang.org/x/crypto/bcrypt#GenerateFromPassword">calculated</a> and
+stored in the database. The server never stores the plaintext version of the
+password.</p>
+<p>Let's run this server locally:</p>
+<div class="highlight"><pre><span></span>$ go run /usr/local/go/src/crypto/tls/generate_cert.go --ecdsa-curve P256 --host localhost
+2021/05/08 06:51:57 wrote cert.pem
+2021/05/08 06:51:57 wrote key.pem
+
+$ go run https-basic-auth-server.go
+2021/05/08 06:52:16 Starting server on :4000
+</pre></div>
+<p>Now we can test it with <tt class="docutils literal">curl</tt>. Let's try the root path first, to check that
+our TLS setup is working:</p>
+<div class="highlight"><pre><span></span>$ curl --cacert cert.pem https://localhost:4000/
+Proudly served with Go and HTTPS!
+</pre></div>
+<p>We can try to access the <tt class="docutils literal">secret/</tt> path without auth:</p>
+<div class="highlight"><pre><span></span>$ curl --cacert cert.pem https://localhost:4000/secret/
+Unauthorized
+</pre></div>
+<p>Finally, let's access the same path authenticating as user "joe". This user's
+actual password is "1234", and the authentication header expects "joe:1234" to
+be base64-encoded <a class="footnote-reference" href="#footnote-2" id="footnote-reference-2">[2]</a>:</p>
+<div class="highlight"><pre><span></span>$ echo -n "joe:1234" | base64
+am9lOjEyMzQ=
+
+$ curl --cacert cert.pem -H "Authorization: Basic am9lOjEyMzQ=" https://localhost:4000/secret/
+You get to see the secret
+</pre></div>
+<p>It works! For completeness, <a class="reference external" href="https://github.com/eliben/code-for-blog/blob/master/2021/go-rest-servers/auth/basic-sample/https-basic-auth-client.go">here's a Go client</a>
+that can be used to access our server:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">addr</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"addr"</span><span class="p">,</span><span class="w"> </span><span class="s">"localhost:4000"</span><span class="p">,</span><span class="w"> </span><span class="s">"HTTPS server address"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">certFile</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"certfile"</span><span class="p">,</span><span class="w"> </span><span class="s">"cert.pem"</span><span class="p">,</span><span class="w"> </span><span class="s">"trusted CA certificate"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">user</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">""</span><span class="p">,</span><span class="w"> </span><span class="s">"username"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">pass</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"pass"</span><span class="p">,</span><span class="w"> </span><span class="s">""</span><span class="p">,</span><span class="w"> </span><span class="s">"password"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">flag</span><span class="p">.</span><span class="nx">Parse</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// Read the trusted CA certificate from a file and set up a client with TLS</span><span class="w"></span>
+<span class="w">  </span><span class="c1">// config to trust a server signed with this certificate.</span><span class="w"></span>
+<span class="w">  </span><span class="nx">cert</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">ReadFile</span><span class="p">(</span><span class="o">*</span><span class="nx">certFile</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">certPool</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">x509</span><span class="p">.</span><span class="nx">NewCertPool</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">certPool</span><span class="p">.</span><span class="nx">AppendCertsFromPEM</span><span class="p">(</span><span class="nx">cert</span><span class="p">);</span><span class="w"> </span><span class="p">!</span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatalf</span><span class="p">(</span><span class="s">"unable to parse cert from %s"</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="nx">certFile</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">client</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">Transport</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">TLSClientConfig</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="nx">RootCAs</span><span class="p">:</span><span class="w"> </span><span class="nx">certPool</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="p">},</span><span class="w"></span>
+<span class="w">    </span><span class="p">},</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// Set up HTTPS request with basic authorization.</span><span class="w"></span>
+<span class="w">  </span><span class="nx">req</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewRequest</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodGet</span><span class="p">,</span><span class="w"> </span><span class="s">"https://"</span><span class="o">+*</span><span class="nx">addr</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">req</span><span class="p">.</span><span class="nx">SetBasicAuth</span><span class="p">(</span><span class="o">*</span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="nx">pass</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">resp</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="k">defer</span><span class="w"> </span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">html</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"HTTP Status:"</span><span class="p">,</span><span class="w"> </span><span class="nx">resp</span><span class="p">.</span><span class="nx">Status</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"Response body:"</span><span class="p">,</span><span class="w"> </span><span class="nb">string</span><span class="p">(</span><span class="nx">html</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>The interesting part here is calling <tt class="docutils literal">Request.SetBasicAuth</tt> with the username
+and password that were passed on the command line. It does the proper encoding
+for us and adds the appropriate header. With our server still running, we can
+run this client:</p>
+<div class="highlight"><pre><span></span>$ go run https-basic-auth-client.go -user joe -pass 1234 -addr localhost:4000/secret/
+HTTP Status: 200 OK
+Response body: You get to see the secret
+</pre></div>
+<p>But if we use the wrong password, we won't get access:</p>
+<div class="highlight"><pre><span></span>$ go run https-basic-auth-client.go -user joe -pass 1238 -addr localhost:4000/secret/
+HTTP Status: 401 Unauthorized
+Response body: Unauthorized
+</pre></div>
+</div>
+<div class="section" id="task-server-with-https-and-per-path-authentication-middleware">
+<h2>Task server with HTTPS and per-path authentication middleware</h2>
+<p>Now that we have a better understanding of securing REST servers with HTTPS and
+basic authentication, let's get back to our original store server and retrofit
+it with the right security mechanism.</p>
+<p>The full code for this server <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/auth/taskstore-auth">is available here</a>. I've taken the
+<tt class="docutils literal"><span class="pre">gorilla-middleware</span></tt> version from <a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/">part 5</a>
+and equipped it with HTTPS and basic auth. The bulk of the change is in the
+<tt class="docutils literal">main</tt> function; here's the new one, with lines that change from the previous
+version highlighted:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="hll"><span class="w">  </span><span class="nx">certFile</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"certfile"</span><span class="p">,</span><span class="w"> </span><span class="s">"cert.pem"</span><span class="p">,</span><span class="w"> </span><span class="s">"certificate PEM file"</span><span class="p">)</span><span class="w"></span>
+</span><span class="hll"><span class="w">  </span><span class="nx">keyFile</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">flag</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="s">"keyfile"</span><span class="p">,</span><span class="w"> </span><span class="s">"key.pem"</span><span class="p">,</span><span class="w"> </span><span class="s">"key PEM file"</span><span class="p">)</span><span class="w"></span>
+</span><span class="hll"><span class="w">  </span><span class="nx">flag</span><span class="p">.</span><span class="nx">Parse</span><span class="p">()</span><span class="w"></span>
+</span>
+<span class="w">  </span><span class="nx">router</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">mux</span><span class="p">.</span><span class="nx">NewRouter</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">StrictSlash</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+
+<span class="hll"><span class="w">  </span><span class="c1">// The "create task" path is protected with the BasicAuth middleware.</span><span class="w"></span>
+</span><span class="hll"><span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"></span>
+</span><span class="hll"><span class="w">    </span><span class="nx">middleware</span><span class="p">.</span><span class="nx">BasicAuth</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="nx">server</span><span class="p">.</span><span class="nx">createTaskHandler</span><span class="p">))).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"POST"</span><span class="p">)</span><span class="w"></span>
+</span><span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getAllTasksHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteAllTasksHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"DELETE"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/{id:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">getTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/{id:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">deleteTaskHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"DELETE"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/tag/{tag}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/{year:[0-9]+}/{month:[0-9]+}/{day:[0-9]+}/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">).</span><span class="nx">Methods</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// Set up logging and panic recovery middleware for all paths.</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Use</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="p">)</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">handlers</span><span class="p">.</span><span class="nx">LoggingHandler</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">,</span><span class="w"> </span><span class="nx">h</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">})</span><span class="w"></span>
+<span class="w">  </span><span class="nx">router</span><span class="p">.</span><span class="nx">Use</span><span class="p">(</span><span class="nx">handlers</span><span class="p">.</span><span class="nx">RecoveryHandler</span><span class="p">(</span><span class="nx">handlers</span><span class="p">.</span><span class="nx">PrintRecoveryStack</span><span class="p">(</span><span class="kc">true</span><span class="p">)))</span><span class="w"></span>
+
+<span class="hll"><span class="w">  </span><span class="nx">addr</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">"localhost:"</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SERVERPORT"</span><span class="p">)</span><span class="w"></span>
+</span><span class="hll"><span class="w">  </span><span class="nx">srv</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="w"></span>
+</span><span class="hll"><span class="w">    </span><span class="nx">Addr</span><span class="p">:</span><span class="w">    </span><span class="nx">addr</span><span class="p">,</span><span class="w"></span>
+</span><span class="hll"><span class="w">    </span><span class="nx">Handler</span><span class="p">:</span><span class="w"> </span><span class="nx">router</span><span class="p">,</span><span class="w"></span>
+</span><span class="hll"><span class="w">    </span><span class="nx">TLSConfig</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span><span class="w"></span>
+</span><span class="hll"><span class="w">      </span><span class="nx">MinVersion</span><span class="p">:</span><span class="w">               </span><span class="nx">tls</span><span class="p">.</span><span class="nx">VersionTLS13</span><span class="p">,</span><span class="w"></span>
+</span><span class="hll"><span class="w">      </span><span class="nx">PreferServerCipherSuites</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"></span>
+</span><span class="hll"><span class="w">    </span><span class="p">},</span><span class="w"></span>
+</span><span class="hll"><span class="w">  </span><span class="p">}</span><span class="w"></span>
+</span><span class="hll">
+</span><span class="hll"><span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">"Starting server on %s"</span><span class="p">,</span><span class="w"> </span><span class="nx">addr</span><span class="p">)</span><span class="w"></span>
+</span><span class="hll"><span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">srv</span><span class="p">.</span><span class="nx">ListenAndServeTLS</span><span class="p">(</span><span class="o">*</span><span class="nx">certFile</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="nx">keyFile</span><span class="p">))</span><span class="w"></span>
+</span><span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Let's review the changes in detail:</p>
+<ul class="simple">
+<li>First, we add flags for setting the certificate and key files for TLS.</li>
+<li>We wrap the handler for the "create new task" path in <tt class="docutils literal">middleware.BasicAuth</tt>;
+we'll see the code for this middleware shortly. This also demonstrates how to
+set up middleware per-path with Gorilla routing. We could easily require
+authentication for all paths in the server, but here I just want to
+demonstrate how to use it for specific path.</li>
+<li>We set up the server to use HTTPS.</li>
+</ul>
+<p>Here's the code for the <tt class="docutils literal">BasicAuth</tt> middleware <a class="footnote-reference" href="#footnote-3" id="footnote-reference-3">[3]</a>:</p>
+<div class="highlight"><pre><span></span><span class="c1">// UserContextKey is the key in a request's context used to check if the request</span><span class="w"></span>
+<span class="c1">// has an authenticated user. The middleware will set the value of this key to</span><span class="w"></span>
+<span class="c1">// the username, if the user was properly authenticated with a password.</span><span class="w"></span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">UserContextKey</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"user"</span><span class="w"></span>
+
+<span class="c1">// BasicAuth is middleware that verifies the request has appropriate basic auth</span><span class="w"></span>
+<span class="c1">// set up with a user:password pair verified by authdb.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">BasicAuth</span><span class="p">(</span><span class="nx">next</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="p">)</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="nx">pass</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">BasicAuth</span><span class="p">()</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">authdb</span><span class="p">.</span><span class="nx">VerifyUserPass</span><span class="p">(</span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="nx">pass</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">newctx</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">WithValue</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">Context</span><span class="p">(),</span><span class="w"> </span><span class="nx">UserContextKey</span><span class="p">,</span><span class="w"> </span><span class="nx">user</span><span class="p">)</span><span class="w"></span>
+<span class="w">      </span><span class="nx">next</span><span class="p">.</span><span class="nx">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">WithContext</span><span class="p">(</span><span class="nx">newctx</span><span class="p">))</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">w</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">"WWW-Authenticate"</span><span class="p">,</span><span class="w"> </span><span class="s">`Basic realm="api"`</span><span class="p">)</span><span class="w"></span>
+<span class="w">      </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">"Unauthorized"</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusUnauthorized</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="p">})</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>The code should be familiar by now - it's very similar to our <tt class="docutils literal">secret/</tt>
+handler from the previous example. The one thing that changes here is that this
+middleware attaches a key to the request's context when auth succeeds; in our
+case, the handler doesn't use this key, but in more sophisticated applications
+it could. For example, it could use it for <em>authorization</em> if different users
+have different access rights on specific paths.</p>
+<p>Finally, the <tt class="docutils literal">authdb</tt> package has the <tt class="docutils literal">VerifyUserPass</tt> function that's
+exactly similar to our earlier example, so I won't list it here. In reality,
+<tt class="docutils literal">authdb</tt> would be a layer around a DB table mapping users to their bcrypt-ed
+passwords.</p>
+</div>
+<div class="section" id="final-notes">
+<h2>Final notes</h2>
+<p>In the previous parts of the series, we built several variants of a REST API
+server using different approaches and frameworks. Neither of them was secure,
+however, due to the use of unencrypted HTTP and the lack of authentication.</p>
+<p>In this part we created a secure version of our server, using HTTPS and basic
+authentication. This technique can be applied to every variant of the server
+since it has very few dependencies; the only outside-of-stdlib dependency
+is <tt class="docutils literal">x/crypto/bcrypt</tt>, where <tt class="docutils literal">x/</tt> is commonly considered to be the extended
+standard library and is maintained mostly by the Go team.</p>
+<p>The approach presented here is simple on purpose. There is a lot of complexity
+and tooling around auth - sessions, client-side state (cookies, JWT),
+server-side state, etc. In my experience, not much of this applies to REST
+servers. In REST, every request should be isolated from every other, so
+sessions don't fit into the concept very well. Basic authentication works,
+though refinements are possible. For example, tokens could be used instead of
+passwords to make the access more ephemeral, or to shift the burden of
+authentication to a third party (for example with OAuth 2.0).</p>
+<hr class="docutils">
+<table class="docutils footnote" frame="void" id="footnote-1" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-1">[1]</a></td><td><p class="first">Mandatory disclaimer: I'm not a security expert, and this post's focus
+is on the mechanics of setting up authentication over HTTPS in Go, not
+nuances of security engineering.</p>
+<p>I've read several online resources when preparing to write this post,
+and my conclusion is that HTTP basic auth over TLS is safe. There are
+a number of gotchas you should be aware of when using basic auth as
+built into browsers (where it pops a gray box for you), but this rarely
+applies to REST APIs. The only legitimate criticism of this scheme I
+found is that sending the password for each request increases the
+attack window; this is true, but alternatives like stateful tokens don't
+feel very REST-like to me. REST is supposed to be <em>stateless</em>.</p>
+<p>Looking at APIs for large services like StackOverflow or GitHub, these
+generally use secret tokens you generate when logged in. Secret tokens
+are sent for each request and aren't, generally, much different from
+passwords. One advantage of tokens over passwords is that they're more
+easily revoked, and a single user can have multiple tokens for different
+needs and "access levels". Tokens could also remove the need for
+<tt class="docutils literal">bcrypt</tt>-ing passwords, which could improve latency (since <tt class="docutils literal">bcrypt</tt>
+is slow by design).</p>
+<p class="last">If you're using this to set up security for a critical application/API,
+please consult a security expert.</p>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="footnote-2" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-2">[2]</a></td><td>I'm demonstrating setting the auth header manually here, but <tt class="docutils literal">curl</tt>
+can also do it for us if we pass <tt class="docutils literal"><span class="pre">--user</span> joe:1234</tt> instead.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="footnote-3" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-3">[3]</a></td><td>This middleware is quite similar to
+<a class="reference external" href="https://pkg.go.dev/github.com/gin-gonic/gin#BasicAuth">Gin's BasicAuth</a> middleware.</td></tr>
+</tbody>
+</table>
+</div>
+
+            </div>
+            <!-- /.entry-content -->
+<hr>
+<div class="dotted-links">
+<p class="align-center">
+For comments, please send me
+<a href="mailto:eliben@gmail.com"><i class="fa fa-envelope-o"></i> an email</a>.
+</p>
+</div>        </article>
+    </section>
+
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">
+            © 2003-2023 Eli Bendersky
+         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/jquery-2.2.4.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.js"></script>
+
+<!--
+  Using goatcounter to count visitors. The count.js script is vendored in.
+-->
+<script data-goatcounter="https://stats.thegreenplace.net/count" async="" src="REST%20Servers%20in%20Go%20Part%206%20-%20authentication%20-%20Eli%20Bendersky's%20website_files/count.js"></script>
+
+</body></html>

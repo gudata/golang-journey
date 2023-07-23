@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.97.3">
+
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Ivan Kuznetsov">
+  <meta property="og:url" content="https://jeiwan.net/posts/building-blockchain-in-go-part-2/">
+
+  <title>Building Blockchain in Go. Part 2: Proof-of-Work - Going the distance</title>
+  <meta property="og:title" content="Building Blockchain in Go. Part 2: Proof-of-Work - Going the distance">
+  <meta property="og:type" content="article">
+  <meta name="description" content="A blog about blockchains and smart contracts development">
+  <meta name="keywords" content="bitcoin, ethereum, evm, smart contract, blockchain, programming, development, solidity, vyper">
+
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%202%20Proof-of-Work%20-%20Going%20the%20distance_files/css.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%202%20Proof-of-Work%20-%20Going%20the%20distance_files/prism.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%202%20Proof-of-Work%20-%20Going%20the%20distance_files/journal.css">
+  <link href="https://jeiwan.net/index.xml" rel="alternate" type="application/rss+xml" title="Going the distance">
+
+  
+
+  
+
+</head>
+
+<body>
+  <div class="container">
+
+    <nav class="site-nav">
+      <a href="https://jeiwan.net/">Index</a>
+    </nav>
+
+
+<article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Building Blockchain in Go. Part 2: Proof-of-Work</h1>
+    <time class="post-date" datetime=" 2017-08-22 12:42:19 +07">22 Aug 2017</time>
+  </header>
+
+  <blockquote>
+<p>Chinese translations: <a href="https://github.com/liuchengxu/blockchain-tutorial/blob/master/content/part-2/proof-of-work.md">by liuchengxu</a>, <a href="https://zhangli1.gitbooks.io/dummies-for-blockchain/content/">by zhangli1</a>.</p>
+</blockquote>
+<h2 id="introduction">Introduction</h2>
+<p>In <a href="https://jeiwan.net/posts/building-blockchain-in-go-part-1/">the previous article</a>
+ we built a very simple data structure, which is the essence of 
+blockchain database. And we made it possible to add blocks to it with 
+the chain-like relation between them: each block is linked to the 
+previous one. Alas, our blockchain implementation has one significant 
+flaw: adding blocks to the chain is easy and cheap. One of the keystones
+ of blockchain and Bitcoin is that adding new blocks is a hard work. 
+Today we’re going to fix this flaw.</p>
+<h2 id="proof-of-work">Proof-of-Work</h2>
+<p>A key idea of blockchain is that one has to perform some hard work to
+ put data in it. It is this hard work that makes blockchain secure and 
+consistent. Also, a reward is paid for this hard work (this is how 
+people get coins for mining).</p>
+<p>This mechanism is very similar to the one from real life: one has to 
+work hard to get a reward and to sustain their life. In blockchain, some
+ participants (miners) of the network work to sustain the network, to 
+add new blocks to it, and get a reward for their work. As a result of 
+their work, a block is incorporated into the blockchain in a secure way,
+ which maintains the stability of the whole blockchain database. It’s 
+worth noting that, the one who finished the work has to prove this.</p>
+<p>This whole “do hard work and prove” mechanism is called 
+proof-of-work. It’s hard because it requires a lot of computational 
+power: even high performance computers cannot do it quickly. Moreover, 
+the difficulty of this work increases from time to time to keep new 
+blocks rate at about 6 blocks per hour. In Bitcoin, the goal of such 
+work is to find a hash for a block, that meets some requirements. And 
+it’s this hash that serves as a proof. Thus, finding a proof is the 
+actual work.</p>
+<p>One last thing to note. Proof-of-Work algorithms must meet a 
+requirement: doing the work is hard, but verifying the proof is easy. A 
+proof is usually handed to someone else, so for them, it shouldn’t take 
+much time to verify it.</p>
+<h2 id="hashing">Hashing</h2>
+<p>In this paragraph, we’ll discuss hashing. If you’re familiar with the concept, you can skip this part.</p>
+<p>Hashing is a process of obtaining a hash for specified data. A hash 
+is a unique representation of the data it was calculated on. A hash 
+function is a function that takes data of arbitrary size and produces a 
+fixed size hash. Here are some key features of hashing:</p>
+<ol>
+<li>Original data cannot be restored from a hash. Thus, hashing is not encryption.</li>
+<li>Certain data can have only one hash and the hash is unique.</li>
+<li>Changing even one byte in the input data will result in a completely different hash.</li>
+</ol>
+<p><img src="Building%20Blockchain%20in%20Go.%20Part%202%20Proof-of-Work%20-%20Going%20the%20distance_files/hashing-example.png" alt="Hashing example"></p>
+<p>Hashing functions are widely used to check the consistency of data. 
+Some software providers publish checksums in addition to a software 
+package. After downloading a file you can feed it to a hashing function 
+and compare produced hash with the one provided by the software 
+developer.</p>
+<p>In blockchain, hashing is used to guarantee the consistency of a 
+block. The input data for a hashing algorithm contains the hash of the 
+previous block, thus making it impossible (or, at least, quite 
+difficult) to modify a block in the chain: one has to recalculate its 
+hash and hashes of all the blocks after it.</p>
+<h2 id="hashcash">Hashcash</h2>
+<p>Bitcoin uses <a href="https://en.wikipedia.org/wiki/Hashcash">Hashcash</a>, a Proof-of-Work algorithm that was initially developed to prevent email spam. It can be split into the following steps:</p>
+<ol>
+<li>Take some publicly known data (in case of email, it’s receiver’s email address; in case of Bitcoin, it’s block headers).</li>
+<li>Add a counter to it. The counter starts at 0.</li>
+<li>Get a hash of the <code>data + counter</code> combination.</li>
+<li>Check that the hash meets certain requirements.
+<ol>
+<li>If it does, you’re done.</li>
+<li>If it doesn’t, increase the counter and repeat the steps 3 and 4.</li>
+</ol>
+</li>
+</ol>
+<p>Thus, this is a brute force algorithm: you change the counter, 
+calculate a new hash, check it, increment the counter, calculate a hash,
+ etc. That’s why it’s computationally expensive.</p>
+<p>Now let’s look closer at the requirements a hash has to meet. In the 
+original Hashcash implementation, the requirement sounds like “first 20 
+bits of a hash must be zeros”. In Bitcoin, the requirement is adjusted 
+from time to time, because, by design, a block must be generated every 
+10 minutes, despite computation power increasing with time and more and 
+more miners joining the network.</p>
+<p>To demonstrate this algorithm, I took the data from the previous 
+example (“I like donuts”) and found a hash that starts with 3 
+zero-bytes:</p>
+<p><img src="Building%20Blockchain%20in%20Go.%20Part%202%20Proof-of-Work%20-%20Going%20the%20distance_files/hashcash-example.png" alt="Hashcash example"></p>
+<p><code>ca07ca</code> is the hexadecimal value of the counter, which is 13240266 in the decimal system.</p>
+<h2 id="implementation">Implementation</h2>
+<p>Ok, we’re done with the theory, let’s write code! First, let’s define the difficulty of mining:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">const</span> targetBits <span class="token operator">=</span> <span class="token number">24</span>
+</code></pre></div><p>In Bitcoin, “target bits” is the block header 
+storing the difficulty at which the block was mined. We won’t implement a
+ target adjusting algorithm, for now, so we can just define the 
+difficulty as a global constant.</p>
+<p>24 is an arbitrary number, our goal is to have a target that takes 
+less than 256 bits in memory. And we want the difference to be 
+significant enough, but not too big, because the bigger the difference 
+the more difficult it’s to find a proper hash.</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> ProofOfWork <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	block  <span class="token operator">*</span>Block
+	target <span class="token operator">*</span>big<span class="token punctuation">.</span>Int
+<span class="token punctuation">}</span>
+
+<span class="token keyword">func</span> <span class="token function">NewProofOfWork</span><span class="token punctuation">(</span>b <span class="token operator">*</span>Block<span class="token punctuation">)</span> <span class="token operator">*</span>ProofOfWork <span class="token punctuation">{</span>
+	target <span class="token operator">:=</span> big<span class="token punctuation">.</span><span class="token function">NewInt</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+	target<span class="token punctuation">.</span><span class="token function">Lsh</span><span class="token punctuation">(</span>target<span class="token punctuation">,</span> <span class="token function">uint</span><span class="token punctuation">(</span><span class="token number">256</span><span class="token operator">-</span>targetBits<span class="token punctuation">)</span><span class="token punctuation">)</span>
+
+	pow <span class="token operator">:=</span> <span class="token operator">&amp;</span>ProofOfWork<span class="token punctuation">{</span>b<span class="token punctuation">,</span> target<span class="token punctuation">}</span>
+
+	<span class="token keyword">return</span> pow
+<span class="token punctuation">}</span>
+</code></pre></div><p>Here create <code>ProofOfWork</code> structure 
+that holds a pointer to a block and a pointer to a target. “target” is 
+another name for the requirement described in the previous paragraph. We
+ use a <a href="https://golang.org/pkg/math/big/">big</a> integer 
+because of the way we’ll compare a hash to the target: we’ll convert a 
+hash to a big integer and check if it’s less than the target.</p>
+<p>In the <code>NewProofOfWork</code> function, we initialize a <code>big.Int</code> with the value of 1 and shift it left by <code>256 - targetBits</code> bits. <code>256</code>
+ is the length of a SHA-256 hash in bits, and it’s SHA-256 hashing 
+algorithm that we’re going to use. The hexadecimal representation of <code>target</code> is:</p>
+<pre tabindex="0"><code>0x10000000000000000000000000000000000000000000000000000000000
+</code></pre><p>And it occupies 29 bytes in memory. And here’s its visual comparison with the hashes from the previous examples:</p>
+<pre tabindex="0"><code>0fac49161af82ed938add1d8725835cc123a1a87b1b196488360e58d4bfb51e3
+0000010000000000000000000000000000000000000000000000000000000000
+0000008b0f41ec78bab747864db66bcb9fb89920ee75f43fdaaeb5544f7f76ca
+</code></pre><p>The first hash (calculated on “I like donuts”) is bigger
+ than the target, thus it’s not a valid proof of work. The second hash 
+(calculated on “I like donutsca07ca”) is smaller than the target, thus 
+it’s a valid proof.</p>
+<p>You can think of a target as the upper boundary of a range: if a 
+number (a hash) is lower than the boundary, it’s valid, and vice versa. 
+Lowering the boundary will result in fewer valid numbers, and thus, more
+ difficult work required to find a valid one.</p>
+<p>Now, we need the data to hash. Let’s prepare it:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>pow <span class="token operator">*</span>ProofOfWork<span class="token punctuation">)</span> <span class="token function">prepareData</span><span class="token punctuation">(</span>nonce <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span> <span class="token punctuation">{</span>
+	data <span class="token operator">:=</span> bytes<span class="token punctuation">.</span><span class="token function">Join</span><span class="token punctuation">(</span>
+		<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span>
+			pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span>PrevBlockHash<span class="token punctuation">,</span>
+			pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span>Data<span class="token punctuation">,</span>
+			<span class="token function">IntToHex</span><span class="token punctuation">(</span>pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span>Timestamp<span class="token punctuation">)</span><span class="token punctuation">,</span>
+			<span class="token function">IntToHex</span><span class="token punctuation">(</span><span class="token function">int64</span><span class="token punctuation">(</span>targetBits<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+			<span class="token function">IntToHex</span><span class="token punctuation">(</span><span class="token function">int64</span><span class="token punctuation">(</span>nonce<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+	<span class="token punctuation">)</span>
+
+	<span class="token keyword">return</span> data
+<span class="token punctuation">}</span>
+</code></pre></div><p>This piece is straightforward: we just merge block fields with the target and nonce. <code>nonce</code> here is the counter from the Hashcash description above, this is a cryptographic term.</p>
+<p>Ok, all preparations are done, let’s implement the core of the PoW algorithm:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>pow <span class="token operator">*</span>ProofOfWork<span class="token punctuation">)</span> <span class="token function">Run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token builtin">int</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token keyword">var</span> hashInt big<span class="token punctuation">.</span>Int
+	<span class="token keyword">var</span> hash <span class="token punctuation">[</span><span class="token number">32</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	nonce <span class="token operator">:=</span> <span class="token number">0</span>
+
+	fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Mining the block containing \"%s\"\n"</span><span class="token punctuation">,</span> pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span>Data<span class="token punctuation">)</span>
+	<span class="token keyword">for</span> nonce <span class="token operator">&lt;</span> maxNonce <span class="token punctuation">{</span>
+		data <span class="token operator">:=</span> pow<span class="token punctuation">.</span><span class="token function">prepareData</span><span class="token punctuation">(</span>nonce<span class="token punctuation">)</span>
+		hash <span class="token operator">=</span> sha256<span class="token punctuation">.</span><span class="token function">Sum256</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span>
+		fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"\r%x"</span><span class="token punctuation">,</span> hash<span class="token punctuation">)</span>
+		hashInt<span class="token punctuation">.</span><span class="token function">SetBytes</span><span class="token punctuation">(</span>hash<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+
+		<span class="token keyword">if</span> hashInt<span class="token punctuation">.</span><span class="token function">Cmp</span><span class="token punctuation">(</span>pow<span class="token punctuation">.</span>target<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span> <span class="token punctuation">{</span>
+			<span class="token keyword">break</span>
+		<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+			nonce<span class="token operator">++</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	fmt<span class="token punctuation">.</span><span class="token function">Print</span><span class="token punctuation">(</span><span class="token string">"\n\n"</span><span class="token punctuation">)</span>
+
+	<span class="token keyword">return</span> nonce<span class="token punctuation">,</span> hash<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>First, we initialize variables: <code>hashInt</code> is the integer representation of <code>hash</code>; <code>nonce</code> is the counter. Next, we run an “infinite” loop: it’s limited by <code>maxNonce</code>, which equals to <code>math.MaxInt64</code>; this is done to avoid a possible overflow of <code>nonce</code>.
+ Although the difficulty of our PoW implementation is too low for the 
+counter to overflow, it’s still better to have this check, just in case.</p>
+<p>In the loop we:</p>
+<ol>
+<li>Prepare data.</li>
+<li>Hash it with SHA-256.</li>
+<li>Convert the hash to a big integer.</li>
+<li>Compare the integer with the target.</li>
+</ol>
+<p>As easy as it was explained earlier. Now we can remove the <code>SetHash</code> method of <code>Block</code> and modify the <code>NewBlock</code> function:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">NewBlock</span><span class="token punctuation">(</span>data <span class="token builtin">string</span><span class="token punctuation">,</span> prevBlockHash <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">)</span> <span class="token operator">*</span>Block <span class="token punctuation">{</span>
+	block <span class="token operator">:=</span> <span class="token operator">&amp;</span>Block<span class="token punctuation">{</span>time<span class="token punctuation">.</span><span class="token function">Now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">Unix</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token function">byte</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">,</span> prevBlockHash<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">}</span>
+	pow <span class="token operator">:=</span> <span class="token function">NewProofOfWork</span><span class="token punctuation">(</span>block<span class="token punctuation">)</span>
+	nonce<span class="token punctuation">,</span> hash <span class="token operator">:=</span> pow<span class="token punctuation">.</span><span class="token function">Run</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+	block<span class="token punctuation">.</span>Hash <span class="token operator">=</span> hash<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">]</span>
+	block<span class="token punctuation">.</span>Nonce <span class="token operator">=</span> nonce
+
+	<span class="token keyword">return</span> block
+<span class="token punctuation">}</span>
+</code></pre></div><p>Here you can see that <code>nonce</code> is saved as a <code>Block</code> property. This is necessary because <code>nonce</code> is required to verify a proof. The <code>Block</code> structure now looks so:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> Block <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	Timestamp     <span class="token builtin">int64</span>
+	Data          <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	PrevBlockHash <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	Hash          <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	Nonce         <span class="token builtin">int</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Alright! Let’s run the program to see if everything works fine:</p>
+<pre tabindex="0"><code>Mining the block containing "Genesis Block"
+00000041662c5fc2883535dc19ba8a33ac993b535da9899e593ff98e1eda56a1
+
+Mining the block containing "Send 1 BTC to Ivan"
+00000077a856e697c69833d9effb6bdad54c730a98d674f73c0b30020cc82804
+
+Mining the block containing "Send 2 more BTC to Ivan"
+000000b33185e927c9a989cc7d5aaaed739c56dad9fd9361dea558b9bfaf5fbe
+
+Prev. hash:
+Data: Genesis Block
+Hash: 00000041662c5fc2883535dc19ba8a33ac993b535da9899e593ff98e1eda56a1
+
+Prev. hash: 00000041662c5fc2883535dc19ba8a33ac993b535da9899e593ff98e1eda56a1
+Data: Send 1 BTC to Ivan
+Hash: 00000077a856e697c69833d9effb6bdad54c730a98d674f73c0b30020cc82804
+
+Prev. hash: 00000077a856e697c69833d9effb6bdad54c730a98d674f73c0b30020cc82804
+Data: Send 2 more BTC to Ivan
+Hash: 000000b33185e927c9a989cc7d5aaaed739c56dad9fd9361dea558b9bfaf5fbe
+</code></pre><p>Yay! You can see that every hash now starts with three zero bytes, and it takes some time to get these hashes.</p>
+<p>There’s one more thing left to do: let’s make it possible to validate proof of works.</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>pow <span class="token operator">*</span>ProofOfWork<span class="token punctuation">)</span> <span class="token function">Validate</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">bool</span> <span class="token punctuation">{</span>
+	<span class="token keyword">var</span> hashInt big<span class="token punctuation">.</span>Int
+
+	data <span class="token operator">:=</span> pow<span class="token punctuation">.</span><span class="token function">prepareData</span><span class="token punctuation">(</span>pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span>Nonce<span class="token punctuation">)</span>
+	hash <span class="token operator">:=</span> sha256<span class="token punctuation">.</span><span class="token function">Sum256</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span>
+	hashInt<span class="token punctuation">.</span><span class="token function">SetBytes</span><span class="token punctuation">(</span>hash<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+
+	isValid <span class="token operator">:=</span> hashInt<span class="token punctuation">.</span><span class="token function">Cmp</span><span class="token punctuation">(</span>pow<span class="token punctuation">.</span>target<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span>
+
+	<span class="token keyword">return</span> isValid
+<span class="token punctuation">}</span>
+</code></pre></div><p>And this is where we need the saved nonce.</p>
+<p>Let’s check one more time that everything’s ok:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token operator">...</span>
+
+	<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> block <span class="token operator">:=</span> <span class="token keyword">range</span> bc<span class="token punctuation">.</span>blocks <span class="token punctuation">{</span>
+		<span class="token operator">...</span>
+		pow <span class="token operator">:=</span> <span class="token function">NewProofOfWork</span><span class="token punctuation">(</span>block<span class="token punctuation">)</span>
+		fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"PoW: %s\n"</span><span class="token punctuation">,</span> strconv<span class="token punctuation">.</span><span class="token function">FormatBool</span><span class="token punctuation">(</span>pow<span class="token punctuation">.</span><span class="token function">Validate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+		fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Output:</p>
+<pre tabindex="0"><code>...
+
+Prev. hash:
+Data: Genesis Block
+Hash: 00000093253acb814afb942e652a84a8f245069a67b5eaa709df8ac612075038
+PoW: true
+
+Prev. hash: 00000093253acb814afb942e652a84a8f245069a67b5eaa709df8ac612075038
+Data: Send 1 BTC to Ivan
+Hash: 0000003eeb3743ee42020e4a15262fd110a72823d804ce8e49643b5fd9d1062b
+PoW: true
+
+Prev. hash: 0000003eeb3743ee42020e4a15262fd110a72823d804ce8e49643b5fd9d1062b
+Data: Send 2 more BTC to Ivan
+Hash: 000000e42afddf57a3daa11b43b2e0923f23e894f96d1f24bfd9b8d2d494c57a
+PoW: true
+</code></pre><h2 id="conclusion">Conclusion</h2>
+<p>Our blockchain is a step closer to its actual architecture: adding 
+blocks now requires hard work, thus mining is possible. But it still 
+lacks some crucial features: the blockchain database is not persistent, 
+there are no wallets, addresses, transactions, and there’s no consensus 
+mechanism. All these things we’ll implement in future articles, and for 
+now, happy mining!</p>
+<hr>
+<p>Links:</p>
+<ol>
+<li><a href="https://github.com/Jeiwan/blockchain_go/tree/part_2">Full source codes</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Block_hashing_algorithm">Blockchain hashing algorithm</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Proof_of_work">Proof of work</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Hashcash">Hashcash</a></li>
+</ol>
+
+
+</article>
+
+<hr>
+<br>
+
+
+
+
+
+
+      <footer class="site-footer">
+        <span itemscope="" itemtype="http://schema.org/Person">
+          <link itemprop="url" href="https://jeiwan.net/">
+
+          Author:
+          <span itemprop="name">Ivan Kuznetsov</span>
+
+          <br>
+
+          Get in touch:
+
+          <a itemprop="sameAs" href="mailto:me@jeiwan.ru" target="_blank">E-mail</a>
+
+          <a itemprop="sameAs" href="https://t.me/jeiwan" title="Telegram" target="_blank">Telegram</a>
+
+          <a itemprop="sameAs" href="https://twitter.com/jeiwan7" title="Twitter" target="_blank">Twitter</a>
+
+          <a itemprop="sameAs" href="https://github.com/jeiwan" title="GitHub" target="_blank">GitHub</a>
+
+          
+        </span>
+
+        <br><br>
+
+        <div style="text-align:center">
+          <small>
+            <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="Building%20Blockchain%20in%20Go.%20Part%202%20Proof-of-Work%20-%20Going%20the%20distance_files/88x31.png"></a><br>Content of this site is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
+          </small>
+        </div>
+
+        
+      </footer>
+    </div>
+
+  
+
+    <script src="Building%20Blockchain%20in%20Go.%20Part%202%20Proof-of-Work%20-%20Going%20the%20distance_files/prism.js"></script>
+
+  
+
+</body></html>

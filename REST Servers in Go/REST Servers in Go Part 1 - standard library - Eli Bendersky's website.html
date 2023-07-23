@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:og="http://ogp.me/ns#" xmlns:fb="https://www.facebook.com/2008/fbml"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>REST Servers in Go: Part 1 - standard library - Eli Bendersky's website</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://eli.thegreenplace.net/favicon.ico" rel="icon">
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.css" type="text/css">
+    <link href="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/font-awesome.min.css" rel="stylesheet">
+
+    <link href="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/vs.css" rel="stylesheet">
+    <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/style.css" type="text/css">
+
+        <link href="https://eli.thegreenplace.net/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Eli Bendersky's website ATOM Feed">
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://eli.thegreenplace.net/" class="navbar-brand">
+                <img src="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/logosmall.png" width="32" height="32">
+Eli Bendersky's website            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="https://eli.thegreenplace.net/pages/about">
+                        <i class="fa fa-question"></i>
+                        <span class="icon-label">About</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://eli.thegreenplace.net/archives/all">
+                        <i class="fa fa-th-list"></i>
+                        <span class="icon-label">Archives</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+
+<div class="container">
+    <div class="row">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/" rel="bookmark" title="Permalink to REST Servers in Go: Part 1 - standard library">
+                        REST Servers in Go: Part 1 - standard library
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="published">
+        <i class="fa fa-calendar"></i>
+        <time> January 14, 2021 at 20:37</time>
+    </span>
+<span class="label label-default">Tags</span>
+    <a href="https://eli.thegreenplace.net/tag/go">Go</a>
+        ,
+    <a href="https://eli.thegreenplace.net/tag/network-programming">Network Programming</a>
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>This is the first post in a series about writing REST servers in Go. My plan
+with this series is to implement a simple REST server using several different
+approaches, which should make it easy to compare and contrast these approaches
+and their relative merits.</p>
+<p>Here is a list of posts in the series:</p>
+<ul class="simple">
+<li>Part 1 - standard library (this post)</li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">Part 2 - using a router package</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/">Part 3 - using a web framework</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/">Part 4 - using OpenAPI and Swagger</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/">Part 5 - middleware</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/">Part 6 - authentication</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/">Part 7 - GraphQL</a></li>
+</ul>
+<p>Developers who just start using a language often ask "what framework should I
+use to do X" as one of their first questions. While this makes total sense for
+web applications and servers in many languages, in Go the answer to this
+question is nuanced. There are strong opinions both for and against using
+frameworks. My goal in these posts is to examine the issue objectively from
+several angles.</p>
+<div class="section" id="the-task">
+<h2>The task</h2>
+<p>First of all, I'll assume the reader knows what a <em>REST server</em> is. If you need
+a refresher, <a class="reference external" href="https://www.codecademy.com/articles/what-is-rest">this is a good resource</a>, but there are many others.
+The rest of the series assumes you know what I mean by a "path", "HTTP header",
+"response code", etc.</p>
+<p>In our case, the server is a simple backend for a task management application
+(think Google Keep, Todoist and the like); it presents the following
+REST API to clients <a class="footnote-reference" href="#footnote-1" id="footnote-reference-1">[1]</a>:</p>
+<div class="highlight"><pre><span></span>POST   /task/              :  create a task, returns ID
+GET    /task/&lt;taskid&gt;      :  returns a single task by ID
+GET    /task/              :  returns all tasks
+DELETE /task/&lt;taskid&gt;      :  delete a task by ID
+GET    /tag/&lt;tagname&gt;      :  returns list of tasks with this tag
+GET    /due/&lt;yy&gt;/&lt;mm&gt;/&lt;dd&gt; :  returns list of tasks due by this date
+</pre></div>
+<p>Our server supports <tt class="docutils literal">GET</tt>, <tt class="docutils literal">POST</tt> and <tt class="docutils literal">DELETE</tt> requests, some of them with
+several potential paths. The parts between angle brackets <tt class="docutils literal"><span class="pre">&lt;...&gt;</span></tt> denote
+parameters that the client supplies as part of the request; for example,
+<tt class="docutils literal">GET /task/42</tt> is a request to fetch the task with ID 42, etc. Tasks are
+uniquely identified by IDs.</p>
+<p>The data encoding is JSON. In <tt class="docutils literal">POST /task/</tt> the client will send
+a JSON representation of the task to create. Similarly, everywhere it says
+the server "returns" something, the returned data is encoded as JSON in the body
+of the HTTP response.</p>
+</div>
+<div class="section" id="code">
+<h2>Code</h2>
+<p>The rest of this post will present the server's code in Go, in parts. The
+complete code for the server can be <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/stdlib-basic">found here</a>;
+it's a self-contained Go module, with no dependencies. Once you clone or copy
+the project directory, you can run the server without installing anything:</p>
+<div class="highlight"><pre><span></span>$ SERVERPORT=4112 go run .
+</pre></div>
+<p>Note that <tt class="docutils literal">SERVERPORT</tt> can be any port; this is the TCP port your local server
+is listening on. Once the server is running, you can interact with it in a
+separate terminal by using <tt class="docutils literal">curl</tt> commands, or in any other way that works for
+you. See <a class="reference external" href="https://github.com/eliben/code-for-blog/blob/master/2021/go-rest-servers/testing/manual.sh">this script</a>
+for an example; the directory containing this script also has an automated test
+harness for the server.</p>
+</div>
+<div class="section" id="the-model">
+<h2>The model</h2>
+<p>Let's start by discussing the model (or the "data layer") for our server - the
+<tt class="docutils literal">taskstore</tt> package (<tt class="docutils literal">internal/taskstore</tt> in the project directory). This
+is a simple abstraction representing a database of tasks; here is its API:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">New</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="w"></span>
+
+<span class="c1">// CreateTask creates a new task in the store.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="p">)</span><span class="w"> </span><span class="nx">CreateTask</span><span class="p">(</span><span class="nx">text</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">tags</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">due</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span><span class="w"> </span><span class="kt">int</span><span class="w"></span>
+
+<span class="c1">// GetTask retrieves a task from the store, by id. If no such id exists, an</span><span class="w"></span>
+<span class="c1">// error is returned.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="p">)</span><span class="w"> </span><span class="nx">GetTask</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Task</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"></span>
+
+<span class="c1">// DeleteTask deletes the task with the given id. If no such id exists, an error</span><span class="w"></span>
+<span class="c1">// is returned.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="p">)</span><span class="w"> </span><span class="nx">DeleteTask</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span><span class="w"></span>
+
+<span class="c1">// DeleteAllTasks deletes all tasks in the store.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="p">)</span><span class="w"> </span><span class="nx">DeleteAllTasks</span><span class="p">()</span><span class="w"> </span><span class="kt">error</span><span class="w"></span>
+
+<span class="c1">// GetAllTasks returns all the tasks in the store, in arbitrary order.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="p">)</span><span class="w"> </span><span class="nx">GetAllTasks</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="nx">Task</span><span class="w"></span>
+
+<span class="c1">// GetTasksByTag returns all the tasks that have the given tag, in arbitrary</span><span class="w"></span>
+<span class="c1">// order.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="p">)</span><span class="w"> </span><span class="nx">GetTasksByTag</span><span class="p">(</span><span class="nx">tag</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">Task</span><span class="w"></span>
+
+<span class="c1">// GetTasksByDueDate returns all the tasks that have the given due date, in</span><span class="w"></span>
+<span class="c1">// arbitrary order.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">TaskStore</span><span class="p">)</span><span class="w"> </span><span class="nx">GetTasksByDueDate</span><span class="p">(</span><span class="nx">year</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">month</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Month</span><span class="p">,</span><span class="w"> </span><span class="nx">day</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">Task</span><span class="w"></span>
+</pre></div>
+<p>And the <tt class="docutils literal">Task</tt> type is:</p>
+<div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">Task</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Id</span><span class="w">   </span><span class="kt">int</span><span class="w">       </span><span class="s">`json:"id"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Text</span><span class="w"> </span><span class="kt">string</span><span class="w">    </span><span class="s">`json:"text"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Tags</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w">  </span><span class="s">`json:"tags"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Due</span><span class="w">  </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="s">`json:"due"`</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>The <tt class="docutils literal">taskstore</tt> package implements this API using a simple <tt class="docutils literal">map[int]Task</tt>,
+but you could easily imagine it being implemented using a database. In a
+realistic application, <tt class="docutils literal">TaskStore</tt> would likely be an interface that several
+backends can implement, but for our simple example the current API is
+sufficient. If you'd like an extended exercise, go ahead and implement a
+<tt class="docutils literal">TaskStore</tt> using something like MongoDB.</p>
+</div>
+<div class="section" id="setting-up-the-server">
+<h2>Setting up the server</h2>
+<p>The <tt class="docutils literal">main</tt> function of our server is fairly simple:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">server</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">taskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/tag/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">"localhost:"</span><span class="o">+</span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SERVERPORT"</span><span class="p">),</span><span class="w"> </span><span class="nx">mux</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Let's spend a moment talking about <tt class="docutils literal">NewTaskServer</tt>, and then we'll come back
+to discuss the router and path handlers.</p>
+<p><tt class="docutils literal">NewTaskServer</tt> is a constructor for our server type, <tt class="docutils literal">taskServer</tt>. The
+server wraps a <tt class="docutils literal">TaskStore</tt>, which is safe for <a class="reference external" href="https://eli.thegreenplace.net/2019/on-concurrency-in-go-http-servers">concurrent access</a>.</p>
+<div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">taskServer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">store</span><span class="w"> </span><span class="o">*</span><span class="nx">taskstore</span><span class="p">.</span><span class="nx">TaskStore</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+
+<span class="kd">func</span><span class="w"> </span><span class="nx">NewTaskServer</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">store</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">taskstore</span><span class="p">.</span><span class="nx">New</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">taskServer</span><span class="p">{</span><span class="nx">store</span><span class="p">:</span><span class="w"> </span><span class="nx">store</span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+</div>
+<div class="section" id="routing-and-handlers">
+<h2>Routing and handlers</h2>
+<p>Back to the routing, using the standard HTTP multiplexer included in the
+<tt class="docutils literal">net/http</tt> package:</p>
+<div class="highlight"><pre><span></span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/task/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">taskHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/tag/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">tagHandler</span><span class="p">)</span><span class="w"></span>
+<span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/due/"</span><span class="p">,</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">dueHandler</span><span class="p">)</span><span class="w"></span>
+</pre></div>
+<p>The standard multiplexer is very bare-bones; that's both its strength and
+weakness. Strength because it's super easy to understand - there's no magic
+involved whatsoever. Weakness because it sometimes makes path matching rather
+tedious and split over several places, as we shall soon see.</p>
+<p>Since the standard mux only supports exact matching of path prefixes, we're
+pretty much forced to only match roots at the top level and defer the more
+detailed matching to the handler.</p>
+<p>Let's examine <tt class="docutils literal">taskHandler</tt> in detail:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="p">)</span><span class="w"> </span><span class="nx">taskHandler</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">"/task/"</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="c1">// Request is plain "/task/", without trailing ID.</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodPost</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">ts</span><span class="p">.</span><span class="nx">createTaskHandler</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodGet</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">ts</span><span class="p">.</span><span class="nx">getAllTasksHandler</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodDelete</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">ts</span><span class="p">.</span><span class="nx">deleteAllTasksHandler</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">"expect method GET, DELETE or POST at /task/, got %v"</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="p">),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusMethodNotAllowed</span><span class="p">)</span><span class="w"></span>
+<span class="w">      </span><span class="k">return</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>We begin with the exact match of path to <tt class="docutils literal">/task/</tt> (meaning no <tt class="docutils literal">&lt;taskid&gt;</tt>
+follows). Here we have to figure out which HTTP method is used, and call the
+appropriate server method. Most handlers are fairly simple wrappers around the
+<tt class="docutils literal">TaskStore</tt> API. Let's examine one in detail:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="p">)</span><span class="w"> </span><span class="nx">getAllTasksHandler</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">"handling get all tasks at %s\n"</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">allTasks</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ts</span><span class="p">.</span><span class="nx">store</span><span class="p">.</span><span class="nx">GetAllTasks</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">js</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">json</span><span class="p">.</span><span class="nx">Marshal</span><span class="p">(</span><span class="nx">allTasks</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusInternalServerError</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">w</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">"Content-Type"</span><span class="p">,</span><span class="w"> </span><span class="s">"application/json"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">w</span><span class="p">.</span><span class="nx">Write</span><span class="p">(</span><span class="nx">js</span><span class="p">)</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>This handler has two main jobs:</p>
+<ol class="arabic simple">
+<li>Get data from the model (<tt class="docutils literal">TaskStore</tt>)</li>
+<li>Fill in an HTTP response for the client</li>
+</ol>
+<p>Both are straightforward, but if you examine the other handlers in the server
+you'll notice that the second is a bit repetitive - marshal the JSON, write the
+right HTTP response header, etc. We'll get back to this later on.</p>
+<p>Now back to <tt class="docutils literal">taskHandler</tt>; so far we've seen how it handles direct matches
+of the <tt class="docutils literal">/task/</tt> path. What about <tt class="docutils literal"><span class="pre">/task/&lt;taskid&gt;</span></tt>? That's where the next
+part of the function comes in:</p>
+<div class="highlight"><pre><span></span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="c1">// Request has an ID, as in "/task/&lt;id&gt;".</span><span class="w"></span>
+<span class="w">  </span><span class="nx">path</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strings</span><span class="p">.</span><span class="nx">Trim</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span><span class="w"> </span><span class="s">"/"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">pathParts</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strings</span><span class="p">.</span><span class="nx">Split</span><span class="p">(</span><span class="nx">path</span><span class="p">,</span><span class="w"> </span><span class="s">"/"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="nx">pathParts</span><span class="p">)</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">"expect /task/&lt;id&gt; in task handler"</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusBadRequest</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strconv</span><span class="p">.</span><span class="nx">Atoi</span><span class="p">(</span><span class="nx">pathParts</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusBadRequest</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodDelete</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">ts</span><span class="p">.</span><span class="nx">deleteTaskHandler</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodGet</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">ts</span><span class="p">.</span><span class="nx">getTaskHandler</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">"expect method GET or DELETE at /task/&lt;id&gt;, got %v"</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Method</span><span class="p">),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusMethodNotAllowed</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>When the path is not an exact match to <tt class="docutils literal">/task/</tt>, we expect there to be a
+numeric ID following the slash. The code above parses this numeric ID and
+invokes the appropriate handler (based on HTTP method).</p>
+<p>The rest of the code is more of the same and should be fairly straightforward
+to understand. The only handler that's a bit special is <tt class="docutils literal">createTaskHandler</tt>,
+since it has to parse JSON data sent by the client in the request body. There
+are some nuances to JSON parsing in requests that I didn't cover - check out
+<a class="reference external" href="https://www.alexedwards.net/blog/how-to-properly-parse-a-json-request-body">this post</a>
+for a more thorough approach.</p>
+</div>
+<div class="section" id="making-improvements">
+<h2>Making improvements</h2>
+<p>Now that we have the basic version of the server working, it's time to think
+about potential issues and improvements.</p>
+<p>One obvious place we can improve is the repetitive JSON rendering in our HTTP
+responses, as mentioned earlier. For this, I created a separate version of the
+server called <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/go-rest-servers/stdlib-factorjson">stdlib-factorjson</a>.
+I've kept it separate to help you easily <tt class="docutils literal">diff</tt> it vs. the original server and
+see what changed. The main novelty it contains is this function:</p>
+<div class="highlight"><pre><span></span><span class="c1">// renderJSON renders 'v' as JSON and writes it as a response into w.</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">renderJSON</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">v</span><span class="w"> </span><span class="kd">interface</span><span class="p">{})</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">js</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">json</span><span class="p">.</span><span class="nx">Marshal</span><span class="p">(</span><span class="nx">v</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusInternalServerError</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">w</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">"Content-Type"</span><span class="p">,</span><span class="w"> </span><span class="s">"application/json"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">w</span><span class="p">.</span><span class="nx">Write</span><span class="p">(</span><span class="nx">js</span><span class="p">)</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Using it, we can rewrite all our handlers to be a bit more succinct; for
+example, <tt class="docutils literal">getAllTasksHandler</tt> now becomes:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ts</span><span class="w"> </span><span class="o">*</span><span class="nx">taskServer</span><span class="p">)</span><span class="w"> </span><span class="nx">getAllTasksHandler</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">"handling get all tasks at %s\n"</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">allTasks</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ts</span><span class="p">.</span><span class="nx">store</span><span class="p">.</span><span class="nx">GetAllTasks</span><span class="p">()</span><span class="w"></span>
+<span class="w">  </span><span class="nx">renderJSON</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">allTasks</span><span class="p">)</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>A more fundamental improvement is making path matching cleaner and more
+centralized. While the current path matching approach is simple to debug, it's
+not as simple to grasp at a glance because it's scattered across multiple
+functions. For example, let's say we're trying to figure out where a <tt class="docutils literal">DELETE</tt>
+request to <tt class="docutils literal"><span class="pre">/task/&lt;taskid&gt;</span></tt> is going.</p>
+<ol class="arabic simple">
+<li>First, we find the mux in <tt class="docutils literal">main</tt>, and see that the <tt class="docutils literal">/task/</tt> root goes
+to <tt class="docutils literal">taskHandler</tt></li>
+<li>Then, in <tt class="docutils literal">taskHandler</tt> have have to find the <tt class="docutils literal">else</tt> clause that handles
+non-exact matches to <tt class="docutils literal">/task/</tt>. There we have to read the code parsing the
+<tt class="docutils literal">&lt;taskid&gt;</tt> part into an integer</li>
+<li>Finally, we look at the <tt class="docutils literal">if</tt> statement listing the different methods
+supported for this route and find that <tt class="docutils literal">DELETE</tt> is handled by
+<tt class="docutils literal">deleteTaskHandler</tt></li>
+</ol>
+<p>Placing all of this logic in a single, easily-consumable place is something
+third-party HTTP router packages aim to solve. It's the focus of
+<a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">part 2</a>
+in this series.</p>
+<hr class="docutils">
+<table class="docutils footnote" frame="void" id="footnote-1" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-1">[1]</a></td><td>Note the ad-hoc nature of specifying the REST API for the server.
+We'll discuss more structured/standard ways in future parts of this
+series.</td></tr>
+</tbody>
+</table>
+</div>
+
+            </div>
+            <!-- /.entry-content -->
+<hr>
+<div class="dotted-links">
+<p class="align-center">
+For comments, please send me
+<a href="mailto:eliben@gmail.com"><i class="fa fa-envelope-o"></i> an email</a>.
+</p>
+</div>        </article>
+    </section>
+
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">
+            © 2003-2023 Eli Bendersky
+         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/jquery-2.2.4.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.js"></script>
+
+<!--
+  Using goatcounter to count visitors. The count.js script is vendored in.
+-->
+<script data-goatcounter="https://stats.thegreenplace.net/count" async="" src="REST%20Servers%20in%20Go%20Part%201%20-%20standard%20library%20-%20Eli%20Bendersky's%20website_files/count.js"></script>
+
+</body></html>

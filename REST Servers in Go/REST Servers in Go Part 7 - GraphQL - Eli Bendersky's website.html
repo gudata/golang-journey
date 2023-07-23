@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:og="http://ogp.me/ns#" xmlns:fb="https://www.facebook.com/2008/fbml"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>REST Servers in Go: Part 7 - GraphQL - Eli Bendersky's website</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://eli.thegreenplace.net/favicon.ico" rel="icon">
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.css" type="text/css">
+    <link href="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/font-awesome.min.css" rel="stylesheet">
+
+    <link href="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/vs.css" rel="stylesheet">
+    <link rel="stylesheet" href="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/style.css" type="text/css">
+
+        <link href="https://eli.thegreenplace.net/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Eli Bendersky's website ATOM Feed">
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://eli.thegreenplace.net/" class="navbar-brand">
+                <img src="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/logosmall.png" width="32" height="32">
+Eli Bendersky's website            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="https://eli.thegreenplace.net/pages/about">
+                        <i class="fa fa-question"></i>
+                        <span class="icon-label">About</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://eli.thegreenplace.net/archives/all">
+                        <i class="fa fa-th-list"></i>
+                        <span class="icon-label">Archives</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+
+<div class="container">
+    <div class="row">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-7-graphql/" rel="bookmark" title="Permalink to REST Servers in Go: Part 7 - GraphQL">
+                        REST Servers in Go: Part 7 - GraphQL
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="published">
+        <i class="fa fa-calendar"></i>
+        <time> June 09, 2021 at 19:35</time>
+    </span>
+<span class="label label-default">Tags</span>
+    <a href="https://eli.thegreenplace.net/tag/go">Go</a>
+        ,
+    <a href="https://eli.thegreenplace.net/tag/network-programming">Network Programming</a>
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>This is the seventh post in a series about writing REST servers in Go. Here is
+a list of posts in the series:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">Part 1 - standard library</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-2-using-a-router-package/">Part 2 - using a router package</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-3-using-a-web-framework/">Part 3 - using a web framework</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-4-using-openapi-and-swagger/">Part 4 - using OpenAPI and Swagger</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-5-middleware/">Part 5 - middleware</a></li>
+<li><a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-6-authentication/">Part 6 - authentication</a></li>
+<li>Part 7 - GraphQL (this post)</li>
+</ul>
+<p>In the previous parts of this series, we've focused on different
+approaches to develop a REST API for our simple task management application. In
+this part, we're going to take a much larger leap and look at how a similar API
+can be exposed with GraphQL instead of REST.</p>
+<p>Although this post spends some time explaining the motivation for using GraphQL
+and compares GraphQL to REST, this is not its primary goal. There are <em>many</em>
+resources explaining these things, and I encourage you to google and read a few.
+The main goal of this post is to show an example of setting up a GraphQL server
+<em>in Go</em>. To make things simpler, it uses a very similar data model to the one in
+previous parts in the series (a simple backend API for managing a task list).</p>
+<div class="section" id="motivation-for-graphql">
+<h2>Motivation for GraphQL</h2>
+<p><a class="reference external" href="https://en.wikipedia.org/wiki/GraphQL">According to Wikipedia</a>:</p>
+<blockquote>
+GraphQL is an open-source data query and manipulation language for APIs, and a
+runtime for fulfilling queries with existing data.</blockquote>
+<p>Consider our task database as described in <a class="reference external" href="https://eli.thegreenplace.net/2021/rest-servers-in-go-part-1-standard-library/">part 1</a>;
+it's very simplistic, so to really motivate GraphQL we'll want to make it a bit
+more realistic. Let's add a sequences of <em>attachments</em> to each task; the Go
+model will now look like this:</p>
+<div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">Attachment</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Name</span><span class="w">     </span><span class="kt">string</span><span class="w">    </span><span class="s">`json:"Name"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Date</span><span class="w">     </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="s">`json:"Date"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Contents</span><span class="w"> </span><span class="kt">string</span><span class="w">    </span><span class="s">`json:"Contents"`</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+
+<span class="kd">type</span><span class="w"> </span><span class="nx">Task</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">ID</span><span class="w">          </span><span class="kt">int</span><span class="w">           </span><span class="s">`json:"Id"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Text</span><span class="w">        </span><span class="kt">string</span><span class="w">        </span><span class="s">`json:"Text"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Tags</span><span class="w">        </span><span class="p">[]</span><span class="kt">string</span><span class="w">      </span><span class="s">`json:"Tags"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Due</span><span class="w">         </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w">     </span><span class="s">`json:"Due"`</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Attachments</span><span class="w"> </span><span class="p">[]</span><span class="o">*</span><span class="nx">Attachment</span><span class="w"> </span><span class="s">`json:"Attachments"`</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Or, if you prefer a database schema diagram:</p>
+<img alt="Schema for our tasks data store with a one-to-many from Task to Attachment" class="align-center" src="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/tasks-db-schema.png">
+<p>The <tt class="docutils literal">1 <span class="pre">----</span> *</tt> edge between the boxes implies a <em>one-to-many
+relationship</em> in relational database terms. Each task can have multiple
+attachments.</p>
+<p>So far, our REST API has been:</p>
+<div class="highlight"><pre><span></span>POST   /task/              :  create a task, returns ID
+GET    /task/&lt;taskid&gt;      :  returns a single task by ID
+GET    /task/              :  returns all tasks
+DELETE /task/&lt;taskid&gt;      :  delete a task by ID
+GET    /tag/&lt;tagname&gt;      :  returns list of tasks with this tag
+GET    /due/&lt;yy&gt;/&lt;mm&gt;/&lt;dd&gt; :  returns list of tasks due by this date
+</pre></div>
+<p>Specifically, note that many of these return <em>a list of tasks</em>. Suppose tasks
+have attachments now, as described above. Attachments can be fairly large.
+Now getting all the tasks for a tag with <tt class="docutils literal">GET <span class="pre">/tag/&lt;tagname&gt;</span></tt> may return <em>a
+lot</em> of data, even if the client only needs the names of the tasks. This isn't
+ideal, especially when the internet connection is slow or costs $$$ for
+bandwidth (think mobile clients, showing you the task list in a phone app). This
+is the problem of <em>over-fetching</em> simple REST APIs suffer from.</p>
+<p>To solve the over-fetching problem, a common approach would be to return just
+the list of task IDs with <tt class="docutils literal">GET <span class="pre">/tag/&lt;tagname&gt;</span></tt>, instead of the tasks themselves.
+Then, having this list of IDs, the client can iterate over it and issue
+<tt class="docutils literal">GET <span class="pre">/task/&lt;taskid&gt;</span></tt> request for each. There could still be some over-fetching
+here, though, because we may not want the whole task, with attachments; so we
+may choose to only return attachment names (or IDs) and have yet another API
+endpoint to fetch <em>these</em>.</p>
+<p>Now we have an opposite problem: <em>under-fetching</em>. Instead of issuing a single
+network request to get the information we need, we issue a whole bunch -
+potentially one for every task with a tag and then one for each attachment of
+this task. This approach has its own issues, e.g. higher latency.</p>
+</div>
+<div class="section" id="how-graphql-addresses-over-fetching-and-under-fetching">
+<h2>How GraphQL addresses over-fetching and under-fetching</h2>
+<p>Let's spend a minute thinking how we could solve this issue. Obviously, we could
+design a specific REST endpoint to just give us the data we need. For example,
+<tt class="docutils literal">GET <span class="pre">/task-name-and-attachment-name-in-tag/&lt;tagname&gt;</span></tt> could return a list of
+task names, with a list of attachment names for each. No over-fetching, no
+under-fetching! This would work, and some REST APIs have specialized endpoints
+like this one; but the problem is obvious - this is hard to scale! Now suppose
+I want the same information, but not by tag; I want it by due date. Will I have
+to write a very similar endpoint, just for due date? It's possible,
+of course, but it should be obvious that as the API gets more complicated, there
+will be a lot of duplication.</p>
+<p>Another alternative is to have a single endpoint to which I can submit a more
+complicated request. Let's call it a <em>query</em>. The query would express exactly
+what parts of the data I want; a bit like SQL.</p>
+<p>Well, this is what GraphQL does. I'll get back to the SQL comparison later on,
+but for now let's see how GraphQL solves this. This is a GraphQL query that can
+be sent by the client:</p>
+<div class="highlight"><pre><span></span>query {
+  getTasksByTag(tag: "shopping") {
+    Text
+    Attachments{
+      Name
+    }
+  }
+}
+</pre></div>
+<p>It will return a list of tasks, but for each task only the text of the task and
+the name of all its attachments will be returned. This is exactly the data we
+want, in a single response.</p>
+</div>
+<div class="section" id="a-task-server-in-go-with-graphql">
+<h2>A task server in Go with GraphQL</h2>
+<p>I've taken the task server from the previous parts in the series, and rewrote it
+to use GraphQL. The data model was updated to include attachments, as described
+above. The full code for the server is <a class="reference external" href="https://github.com/eliben/code-for-blog/tree/master/2021/taskstore-graphql">available here</a>.</p>
+<p>There are several packages for GraphQL in Go; for this experiment, I went with
+<a class="reference external" href="https://github.com/99designs/gqlgen">gqlgen</a>. It takes a GraphQL schema as
+input and generates a bunch of Go code to implement an HTTP server for serving
+queries in these schemas; the actual handlers (called <em>resolvers</em> in GraphQL
+parlance) are left as stubs for the developer to implement. gqlgen has a
+<a class="reference external" href="https://gqlgen.com/getting-started/">decent tutorial</a>, so here I'll just
+focus on explaining how my server works.</p>
+<p>Here's the GraphQL schema for our tasks backend <a class="footnote-reference" href="#footnote-1" id="footnote-reference-1">[1]</a>:</p>
+<div class="highlight"><pre><span></span>type Query {
+    getAllTasks: [Task]
+    getTask(id: ID!): Task
+
+    getTasksByTag(tag: String!): [Task]
+    getTasksByDue(due: Time!): [Task]
+}
+
+type Mutation {
+    createTask(input: NewTask!): Task!
+
+    deleteTask(id: ID!): Boolean
+    deleteAllTasks: Boolean
+}
+
+scalar Time
+
+type Attachment {
+    Name: String!
+    Date: Time!
+    Contents: String!
+}
+
+type Task {
+    Id: ID!
+    Text: String!
+    Tags: [String!]
+    Due: Time!
+    Attachments: [Attachment!]
+}
+
+input NewAttachment {
+    Name: String!
+    Date: Time!
+    Contents: String!
+}
+
+input NewTask {
+    Text: String!
+    Tags: [String!]
+    Due: Time!
+    Attachments: [NewAttachment!]
+}
+</pre></div>
+<p>Several things to note here:</p>
+<ul class="simple">
+<li>The <tt class="docutils literal">Query</tt> and <tt class="docutils literal">Mutation</tt> types are special in GraphQL - they define
+the actual API. The other types are interesting too - GraphQL is
+strongly typed! This is nice, as it makes validation of input a better defined
+task (the JSON typically used in REST is much less strongly typed).</li>
+<li>Even though APIs in the <tt class="docutils literal">Query</tt> type appear to return <tt class="docutils literal">[Task]</tt>, which is
+a list of tasks, there is no over-fetching here. As the sample query in the
+previous section demonstrates, GraphQL lets clients specify exactly the fields
+they want from the returned values in their query, and only these fields get
+tranferred over the wire. See my sample query earlier for a realistic example.</li>
+<li>GraphQL doesn't have a build-in type for times and dates, but one can write
+extensions; here I'm using the <tt class="docutils literal">scalar Time</tt> extension which is built into
+gqlgen - it maps it to Go's <tt class="docutils literal">time.Time</tt>.</li>
+</ul>
+<p>Finally, it's hard to not notice the <tt class="docutils literal">NewTask</tt> and <tt class="docutils literal">NewAttachment</tt> types
+that duplicate <tt class="docutils literal">Task</tt> and <tt class="docutils literal">Attachment</tt>. What's up with that? The answer here
+is rather complicated. GraphQL types can represent graphs, in the sense that
+one task can have multiple attachments, but in theory each attachment can belong
+to multiple tasks. This could be the source of the "graph" in GraphQL's name
+(I'll be happy to know if I'm wrong about this!), and it's very different from
+how we design relational databases.</p>
+<p>Such graph data could be tricky to construct in a parameter; if it's mutually
+recursive, how do you do it? So GraphQL opted for a strict separation - types
+usable as inputs need to be clearly marked as such, and can only be <em>trees</em>,
+not <em>graphs</em>. Therefore, while we theoretically could have reused <tt class="docutils literal">Task</tt> for
+input parameters (since it's not a graph), GraphQL forbids this and insists on
+a new type.</p>
+<p>The steps I followed with my project were:</p>
+<ol class="arabic simple">
+<li><tt class="docutils literal">go run github.com/99designs/gqlgen init</tt></li>
+<li>Write my GraphQL schema as shown above</li>
+<li><tt class="docutils literal">go run github.com/99designs/gqlgen generate</tt></li>
+<li>Update the generated code to implement my resolvers</li>
+<li>Run the generated <tt class="docutils literal">server.go</tt></li>
+</ol>
+<p>For the resolvers, gqlgen emits an empty struct type called <tt class="docutils literal">Resolver</tt>, on
+which the handler methods are defined. This struct should be updated by the
+application to include any shared context information needed for all resolvers.
+For the task application, we just need the task store:</p>
+<div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">Resolver</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">Store</span><span class="w"> </span><span class="o">*</span><span class="nx">taskstore</span><span class="p">.</span><span class="nx">TaskStore</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>gqlgen also generates stub handler methods which we should fill in. For most
+resolvers, this is trivial; for example:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">queryResolver</span><span class="p">)</span><span class="w"> </span><span class="nx">GetAllTasks</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="o">*</span><span class="nx">model</span><span class="p">.</span><span class="nx">Task</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">Store</span><span class="p">.</span><span class="nx">GetAllTasks</span><span class="p">(),</span><span class="w"> </span><span class="kc">nil</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Note that our resolver returns the list of tasks in their entirety; the field
+selection (or "no over-fetching") feature of GraphQL is implemented by the
+code gqlgen generates for us. As far as I could find, there's not way to know in
+the resolver which fieds the query is asking for, so we always have to fetch
+everything from the DB <a class="footnote-reference" href="#footnote-2" id="footnote-reference-2">[2]</a>. This may be a limitation of gqlgen, or it just may
+be the way all GraphQL servers work - I'm not sure.</p>
+<p>Finally, gqlgen generates a <tt class="docutils literal">main</tt> function for us in <tt class="docutils literal">server.go</tt>, which we
+can tweak:</p>
+<div class="highlight"><pre><span></span><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">  </span><span class="nx">port</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"PORT"</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nx">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">""</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">port</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">defaultPort</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">resolver</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">graph</span><span class="p">.</span><span class="nx">Resolver</span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">Store</span><span class="p">:</span><span class="w"> </span><span class="nx">taskstore</span><span class="p">.</span><span class="nx">New</span><span class="p">(),</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="nx">srv</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">handler</span><span class="p">.</span><span class="nx">NewDefaultServer</span><span class="p">(</span><span class="nx">generated</span><span class="p">.</span><span class="nx">NewExecutableSchema</span><span class="p">(</span><span class="nx">generated</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span><span class="nx">Resolvers</span><span class="p">:</span><span class="w"> </span><span class="nx">resolver</span><span class="p">}))</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/"</span><span class="p">,</span><span class="w"> </span><span class="nx">playground</span><span class="p">.</span><span class="nx">Handler</span><span class="p">(</span><span class="s">"GraphQL playground"</span><span class="p">,</span><span class="w"> </span><span class="s">"/query"</span><span class="p">))</span><span class="w"></span>
+<span class="w">  </span><span class="nx">http</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/query"</span><span class="p">,</span><span class="w"> </span><span class="nx">srv</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">"connect to http://localhost:%s/ for GraphQL playground"</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">":"</span><span class="o">+</span><span class="nx">port</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="p">))</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>Here <tt class="docutils literal">handler.NewDefaultServer</tt> is the GraphQL server, and it's registered on
+the <tt class="docutils literal">/query</tt> path. We could add more paths here - for example, we could even
+mix REST with GraphQL.</p>
+</div>
+<div class="section" id="playground-interacting-with-a-graphql-server">
+<h2>Playground - interacting with a GraphQL server</h2>
+<p>One of the coolest features of GraphQL is the <em>playground</em> which makes it very
+pleasant and easy to experiment with a server right from the browser. In the
+server code above, you'll note the <tt class="docutils literal">playground.Handler</tt> registered to serve
+on the root path. It serves a single-page application called
+<a class="reference external" href="https://github.com/graphql/graphql-playground">graphql-playground</a>; here's
+how it looks:</p>
+<img alt="Screenshot of the GraphQL playground interacting with our server" class="align-center" src="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/graphql-playground-screenshot.png">
+<p>As you can see, I typed in the query mentioned earlier and when it runs,
+the data returned by the server can be seen in the right pane. The playground
+includes syntax highlighting, completion, multiple tabs and even allows you
+to translate queries into <tt class="docutils literal">curl</tt> invocations if you need to save them to
+testing scripts.</p>
+</div>
+<div class="section" id="graphql-vs-rest">
+<h2>GraphQL vs. REST</h2>
+<p>At the basic level, GraphQL has some clear advantages vs. REST, particularly in
+the area of efficiency where over- or under-fetching can cause REST APIs to be
+suboptimal. That said, this flexibility in GraphQL comes at a cost - it becomes
+very easy to submit arbitrarily complex GraphQL queries and thus cause DoS
+attacks to the server; obviously, best practices are evolving to help GraphQL
+server developers avoid these pitfalls.</p>
+<p>GraphQL is an emerging technology, and a lot of interesting tooling is evolving
+along with it - like the playground shown above. However, REST has been around
+for much longer and is difficult to compete with w.r.t. tooling and
+interoperability. Pretty much any server has a REST API today, and much tooling
+has been built for monitoring, logging, profiling and other introspection of
+REST APIs. REST is also very <em>simple</em> - just paths to access over HTTP, and can
+often be exercised with simple <tt class="docutils literal">curl</tt> invocations or in the browser. GraphQL
+is more involved as the query has to be placed into the body of a POST request.</p>
+<p>The simplicity of REST has a deeper implication; in a typical web backend,
+REST queries will be serviced by (often non-trivial) SQL queries sent to a DB.
+GraphQL adds its own query language, which is a little bit like SQL in some ways
+but also very different in other ways, because the graph model it relies on is
+not really relational. So GraphQL, in my experience, makes you keep more state
+in your head - the state of the GraphQL query <em>and</em> how it maps to the
+underlying relational DB. Emerging projects like <a class="reference external" href="https://github.com/dgraph-io/dgraph">Dgraph</a> (a native GraphQL DB with a graph
+backend) and <a class="reference external" href="https://github.com/graphile/postgraphile/">PostGraphile</a> (an
+automatic mapper bewteen GraphQL and PostgreSQL) are interesting players worth
+watching in this field.</p>
+<p>Another point worth mentioning is caching; REST plays well with HTTP caching,
+since much of it relies on idempotent GET requests. GraphQL is trickier in this
+regard, since it doesn't distinguish between idempotent data queries and
+mutations on the HTTP level.</p>
+<p>At the end of the day, engineers are either constrained by the systems they have
+to interact with, or (in rare, lucky cases) have the ability to choose the
+technology for a new project. In the latter case, pick the right tool for the
+job. It's good to have more options!</p>
+<hr class="docutils">
+<table class="docutils footnote" frame="void" id="footnote-1" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-1">[1]</a></td><td>GraphQL schemas are written in a language that's codified by
+a <a class="reference external" href="https://spec.graphql.org/June2018/">spec</a>.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="footnote-2" rules="none">
+<colgroup><col class="label"><col></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#footnote-reference-2">[2]</a></td><td>In SQL parlance, we're always asked to do a <tt class="docutils literal">select * from ...</tt> rather
+than a select on specific fields. Once our resolver returns this data to
+the GraphQL engine, it will only send the selected fields to the client.</td></tr>
+</tbody>
+</table>
+</div>
+
+            </div>
+            <!-- /.entry-content -->
+<hr>
+<div class="dotted-links">
+<p class="align-center">
+For comments, please send me
+<a href="mailto:eliben@gmail.com"><i class="fa fa-envelope-o"></i> an email</a>.
+</p>
+</div>        </article>
+    </section>
+
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">
+            © 2003-2023 Eli Bendersky
+         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/jquery-2.2.4.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/bootstrap.min.js"></script>
+
+<!--
+  Using goatcounter to count visitors. The count.js script is vendored in.
+-->
+<script data-goatcounter="https://stats.thegreenplace.net/count" async="" src="REST%20Servers%20in%20Go%20Part%207%20-%20GraphQL%20-%20Eli%20Bendersky's%20website_files/count.js"></script>
+
+</body></html>

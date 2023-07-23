@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.97.3">
+
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Ivan Kuznetsov">
+  <meta property="og:url" content="https://jeiwan.net/posts/building-blockchain-in-go-part-4/">
+
+  <title>Building Blockchain in Go. Part 4: Transactions 1 - Going the distance</title>
+  <meta property="og:title" content="Building Blockchain in Go. Part 4: Transactions 1 - Going the distance">
+  <meta property="og:type" content="article">
+  <meta name="description" content="A blog about blockchains and smart contracts development">
+  <meta name="keywords" content="bitcoin, ethereum, evm, smart contract, blockchain, programming, development, solidity, vyper">
+
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%204%20Transactions%201%20-%20Going%20the%20distance_files/css.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%204%20Transactions%201%20-%20Going%20the%20distance_files/prism.css">
+  <link rel="stylesheet" href="Building%20Blockchain%20in%20Go.%20Part%204%20Transactions%201%20-%20Going%20the%20distance_files/journal.css">
+  <link href="https://jeiwan.net/index.xml" rel="alternate" type="application/rss+xml" title="Going the distance">
+
+  
+
+  
+
+</head>
+
+<body>
+  <div class="container">
+
+    <nav class="site-nav">
+      <a href="https://jeiwan.net/">Index</a>
+    </nav>
+
+
+<article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Building Blockchain in Go. Part 4: Transactions 1</h1>
+    <time class="post-date" datetime=" 2017-09-04 11:32:39 +07">04 Sep 2017</time>
+  </header>
+
+  <blockquote>
+<p>Chinese translations: <a href="https://github.com/liuchengxu/blockchain-tutorial/blob/master/content/part-4/transactions-1.md">by liuchengxu</a>, <a href="https://zhangli1.gitbooks.io/dummies-for-blockchain/content/">by zhangli1</a></p>
+</blockquote>
+<h2 id="introduction">Introduction</h2>
+<p>Transactions are the heart of Bitcoin and the only purpose of 
+blockchain is to store transactions in a secure and reliable way, so no 
+one could modify them after they are created. Today we’re starting 
+implementing transactions. But because this is quite a big topic, I’ll 
+split it into two parts: in this part, we’ll implement the general 
+mechanism of transactions and in the second part we’ll work through 
+details.</p>
+<p>Also, since code changes are massive, it makes no sense describing all of them here. You can see all the changes <a href="https://github.com/Jeiwan/blockchain_go/compare/part_3...part_4#files_bucket">here</a>.</p>
+<h2 id="there-is-no-spoon">There is no spoon</h2>
+<p>If you’ve ever developed a web application, in order to implement payments you would likely to create these tables in a DB: <code>accounts</code> and <code>transactions</code>.
+ An account would store information about a user, including their 
+personal information and balance, and a transaction would store 
+information about money transferring from one account to another. In 
+Bitcoin, payments are realized in completely different way. There are:</p>
+<ol>
+<li>No accounts.</li>
+<li>No balances.</li>
+<li>No addresses.</li>
+<li>No coins.</li>
+<li>No senders and receivers.</li>
+</ol>
+<p>Since blockchain is a public and open database, we don’t want to 
+store sensitive information about wallet owners. Coins are not collected
+ in accounts. Transactions do not transfer money from one address to 
+another. There’s no field or attribute that holds account balance. There
+ are only transactions. But what’s inside a transaction?</p>
+<h2 id="bitcoin-transaction">Bitcoin Transaction</h2>
+<p>A transaction is a combination of inputs and outputs:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> Transaction <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	ID   <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	Vin  <span class="token punctuation">[</span><span class="token punctuation">]</span>TXInput
+	Vout <span class="token punctuation">[</span><span class="token punctuation">]</span>TXOutput
+<span class="token punctuation">}</span>
+</code></pre></div><p>Inputs of a new transaction reference outputs of a
+ previous transaction (there’s an exception though, which we’ll discuss 
+later). Outputs are where coins are actually stored. The following 
+diagram demonstrates the interconnection of transactions:</p>
+<p><img src="Building%20Blockchain%20in%20Go.%20Part%204%20Transactions%201%20-%20Going%20the%20distance_files/transactions-diagram.png" alt="Transactions"></p>
+<p>Notice that:</p>
+<ol>
+<li>There are outputs that are not linked to inputs.</li>
+<li>In one transaction, inputs can reference outputs from multiple transactions.</li>
+<li>An input must reference an output.</li>
+</ol>
+<p>Throughout this article, we’ll use words like “money”, “coins”, 
+“spend”, “send”, “account”, etc. But there are no such concepts in 
+Bitcoin. Transactions just lock values with a script, which can be 
+unlocked only by the one who locked them.</p>
+<h2 id="transaction-outputs">Transaction Outputs</h2>
+<p>Let’s start with outputs first:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> TXOutput <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	Value        <span class="token builtin">int</span>
+	ScriptPubKey <span class="token builtin">string</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Actually, it’s outputs that store “coins” (notice the <code>Value</code> field above). And storing means locking them with a puzzle, which is stored in the <code>ScriptPubKey</code>. Internally, Bitcoin uses a scripting language called <em>Script</em>,
+ that is used to define outputs locking and unlocking logic. The 
+language is quite primitive (this is made intentionally, to avoid 
+possible hacks and misuses), but we won’t discuss it in details. You can
+ find a detailed explanation of it <a href="https://en.bitcoin.it/wiki/Script">here</a>.</p>
+<blockquote>
+<p>In Bitcoin, the <em>value</em> field stores the number of <em>satoshis</em>, not the number of BTC. A <em>satoshi</em> is a hundred millionth of a bitcoin (0.00000001 BTC), thus this is the smallest unit of currency in Bitcoin (like a cent).</p>
+</blockquote>
+<p>Since we don’t have addresses implemented, we’ll avoid the whole scripting related logic for now. <code>ScriptPubKey</code> will store an arbitrary string (user defined wallet address).</p>
+<blockquote>
+<p>By the way, having such scripting language means that Bitcoin can be used as a smart-contract platform as well.</p>
+</blockquote>
+<p>One important thing about outputs is that they are <strong>indivisible</strong>,
+ which means that you cannot reference a part of its value. When an 
+output is referenced in a new transaction, it’s spent as a whole. And if
+ its value is greater than required, a change is generated and sent back
+ to the sender. This is similar to a real world situation when you pay, 
+say, a $5 banknote for something that costs $1 and get a change of $4.</p>
+<h2 id="transaction-inputs">Transaction Inputs</h2>
+<p>And here’s the input:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> TXInput <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	Txid      <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	Vout      <span class="token builtin">int</span>
+	ScriptSig <span class="token builtin">string</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>As mentioned earlier, an input references a previous output: <code>Txid</code> stores the ID of such transaction, and <code>Vout</code> stores an index of an output in the transaction. <code>ScriptSig</code> is a script which provides data to be used in an output’s <code>ScriptPubKey</code>.
+ If the data is correct, the output can be unlocked, and its value can 
+be used to generate new outputs; if it’s not correct, the output cannot 
+be referenced in the input. This is the mechanism that guarantees that 
+users cannot spend coins belonging to other people.</p>
+<p>Again, since we don’t have addresses implemented yet, <code>ScriptSig</code>
+ will store just an arbitrary user defined wallet address. We’ll 
+implement public keys and signatures checking in the next article.</p>
+<p>Let’s sum it up. Outputs are where “coins” are stored. Each output 
+comes with an unlocking script, which determines the logic of unlocking 
+the output. Every new transaction must have at least one input and 
+output. An input references an output from a previous transaction and 
+provides data (the <code>ScriptSig</code> field) that is used in the output’s unlocking script to unlock it and use its value to create new outputs.</p>
+<p>But what came first: inputs or outputs?</p>
+<h2 id="the-egg">The egg</h2>
+<p>In Bitcoin, it’s the egg that came before the chicken. The 
+inputs-referencing-outputs logic is the classical “chicken or the egg” 
+situation: inputs produce outputs and outputs make inputs possible. And 
+in Bitcoin, outputs come before inputs.</p>
+<p>When a miner starts mining a block, it adds a <strong>coinbase transaction</strong>
+ to it. A coinbase transaction is a special type of transactions, which 
+doesn’t require previously existing outputs. It creates outputs (i.e., 
+“coins”) out of nowhere. The egg without a chicken. This is the reward 
+miners get for mining new blocks.</p>
+<p>As you know, there’s the genesis block in the beginning of a 
+blockchain. It’s this block that generates the very first output in the 
+blockchain. And no previous outputs are required since there are no 
+previous transactions and no such outputs.</p>
+<p>Let’s create a coinbase transaction:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">NewCoinbaseTX</span><span class="token punctuation">(</span>to<span class="token punctuation">,</span> data <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token operator">*</span>Transaction <span class="token punctuation">{</span>
+	<span class="token keyword">if</span> data <span class="token operator">==</span> <span class="token string">""</span> <span class="token punctuation">{</span>
+		data <span class="token operator">=</span> fmt<span class="token punctuation">.</span><span class="token function">Sprintf</span><span class="token punctuation">(</span><span class="token string">"Reward to '%s'"</span><span class="token punctuation">,</span> to<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+
+	txin <span class="token operator">:=</span> TXInput<span class="token punctuation">{</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span> data<span class="token punctuation">}</span>
+	txout <span class="token operator">:=</span> TXOutput<span class="token punctuation">{</span>subsidy<span class="token punctuation">,</span> to<span class="token punctuation">}</span>
+	tx <span class="token operator">:=</span> Transaction<span class="token punctuation">{</span><span class="token boolean">nil</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>TXInput<span class="token punctuation">{</span>txin<span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>TXOutput<span class="token punctuation">{</span>txout<span class="token punctuation">}</span><span class="token punctuation">}</span>
+	tx<span class="token punctuation">.</span><span class="token function">SetID</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+	<span class="token keyword">return</span> <span class="token operator">&amp;</span>tx
+<span class="token punctuation">}</span>
+</code></pre></div><p>A coinbase transaction has only one input. In our implementation its <code>Txid</code> is empty and <code>Vout</code> equals to -1. Also, a coinbase transaction doesn’t store a script in <code>ScriptSig</code>. Instead, arbitrary data is stored there.</p>
+<blockquote>
+<p>In Bitcoin, the very first coinbase transaction contains the 
+following message: “The Times 03/Jan/2009 Chancellor on brink of second 
+bailout for banks”. <a href="https://blockchain.info/tx/4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b?show_adv=true">You can see it yourself</a>.</p>
+</blockquote>
+<p><code>subsidy</code> is the amount of reward. In Bitcoin, this number
+ is not stored anywhere and calculated based only on the total number of
+ blocks: the number of blocks is divided by <code>210000</code>. Mining the genesis block produced 50 BTC, and every <code>210000</code> blocks the reward is halved. In our implementation, we’ll store the reward as a constant (at least for now 😉 ).</p>
+<h2 id="storing-transactions-in-blockchain">Storing Transactions in Blockchain</h2>
+<p>From now on, every block must store at least one transaction and it’s
+ no more possible to mine blocks without transactions. This means that 
+we should remove the <code>Data</code> field of <code>Block</code> and store transactions instead:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">type</span> Block <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	Timestamp     <span class="token builtin">int64</span>
+	Transactions  <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Transaction
+	PrevBlockHash <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	Hash          <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	Nonce         <span class="token builtin">int</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p><code>NewBlock</code> and <code>NewGenesisBlock</code> also must be changed accordingly:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">NewBlock</span><span class="token punctuation">(</span>transactions <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Transaction<span class="token punctuation">,</span> prevBlockHash <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">)</span> <span class="token operator">*</span>Block <span class="token punctuation">{</span>
+	block <span class="token operator">:=</span> <span class="token operator">&amp;</span>Block<span class="token punctuation">{</span>time<span class="token punctuation">.</span><span class="token function">Now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">Unix</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> transactions<span class="token punctuation">,</span> prevBlockHash<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">}</span>
+	<span class="token operator">...</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">func</span> <span class="token function">NewGenesisBlock</span><span class="token punctuation">(</span>coinbase <span class="token operator">*</span>Transaction<span class="token punctuation">)</span> <span class="token operator">*</span>Block <span class="token punctuation">{</span>
+	<span class="token keyword">return</span> <span class="token function">NewBlock</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Transaction<span class="token punctuation">{</span>coinbase<span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Next thing to change is the creation of a new blockchain:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">CreateBlockchain</span><span class="token punctuation">(</span>address <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token operator">*</span>Blockchain <span class="token punctuation">{</span>
+	<span class="token operator">...</span>
+	err <span class="token operator">=</span> db<span class="token punctuation">.</span><span class="token function">Update</span><span class="token punctuation">(</span><span class="token keyword">func</span><span class="token punctuation">(</span>tx <span class="token operator">*</span>bolt<span class="token punctuation">.</span>Tx<span class="token punctuation">)</span> <span class="token builtin">error</span> <span class="token punctuation">{</span>
+		cbtx <span class="token operator">:=</span> <span class="token function">NewCoinbaseTX</span><span class="token punctuation">(</span>address<span class="token punctuation">,</span> genesisCoinbaseData<span class="token punctuation">)</span>
+		genesis <span class="token operator">:=</span> <span class="token function">NewGenesisBlock</span><span class="token punctuation">(</span>cbtx<span class="token punctuation">)</span>
+
+		b<span class="token punctuation">,</span> err <span class="token operator">:=</span> tx<span class="token punctuation">.</span><span class="token function">CreateBucket</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token function">byte</span><span class="token punctuation">(</span>blocksBucket<span class="token punctuation">)</span><span class="token punctuation">)</span>
+		err <span class="token operator">=</span> b<span class="token punctuation">.</span><span class="token function">Put</span><span class="token punctuation">(</span>genesis<span class="token punctuation">.</span>Hash<span class="token punctuation">,</span> genesis<span class="token punctuation">.</span><span class="token function">Serialize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+		<span class="token operator">...</span>
+	<span class="token punctuation">}</span><span class="token punctuation">)</span>
+	<span class="token operator">...</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Now, the function takes an address which will receive the reward for mining the genesis block.</p>
+<h2 id="proof-of-work">Proof-of-Work</h2>
+<p>The Proof-of-Work algorithm must consider transactions stored in a 
+block, to guarantee the consistency and reliability of blockchain as a 
+storage of transaction. So now we must modify the <code>ProofOfWork.prepareData</code> method:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>pow <span class="token operator">*</span>ProofOfWork<span class="token punctuation">)</span> <span class="token function">prepareData</span><span class="token punctuation">(</span>nonce <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span> <span class="token punctuation">{</span>
+	data <span class="token operator">:=</span> bytes<span class="token punctuation">.</span><span class="token function">Join</span><span class="token punctuation">(</span>
+		<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span>
+			pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span>PrevBlockHash<span class="token punctuation">,</span>
+			pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span><span class="token function">HashTransactions</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token comment">// This line was changed</span>
+			<span class="token function">IntToHex</span><span class="token punctuation">(</span>pow<span class="token punctuation">.</span>block<span class="token punctuation">.</span>Timestamp<span class="token punctuation">)</span><span class="token punctuation">,</span>
+			<span class="token function">IntToHex</span><span class="token punctuation">(</span><span class="token function">int64</span><span class="token punctuation">(</span>targetBits<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+			<span class="token function">IntToHex</span><span class="token punctuation">(</span><span class="token function">int64</span><span class="token punctuation">(</span>nonce<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+	<span class="token punctuation">)</span>
+
+	<span class="token keyword">return</span> data
+<span class="token punctuation">}</span>
+</code></pre></div><p>Instead of <code>pow.block.Data</code> we now use <code>pow.block.HashTransactions()</code> which is:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>b <span class="token operator">*</span>Block<span class="token punctuation">)</span> <span class="token function">HashTransactions</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span> <span class="token punctuation">{</span>
+	<span class="token keyword">var</span> txHashes <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+	<span class="token keyword">var</span> txHash <span class="token punctuation">[</span><span class="token number">32</span><span class="token punctuation">]</span><span class="token builtin">byte</span>
+
+	<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> tx <span class="token operator">:=</span> <span class="token keyword">range</span> b<span class="token punctuation">.</span>Transactions <span class="token punctuation">{</span>
+		txHashes <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>txHashes<span class="token punctuation">,</span> tx<span class="token punctuation">.</span>ID<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	txHash <span class="token operator">=</span> sha256<span class="token punctuation">.</span><span class="token function">Sum256</span><span class="token punctuation">(</span>bytes<span class="token punctuation">.</span><span class="token function">Join</span><span class="token punctuation">(</span>txHashes<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+
+	<span class="token keyword">return</span> txHash<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Again, we’re using hashing as a mechanism of 
+providing unique representation of data. We want all transactions in a 
+block to be uniquely identified by a single hash. To achieve this, we 
+get hashes of each transaction, concatenate them, and get a hash of the 
+concatenated combination.</p>
+<blockquote>
+<p>Bitcoin uses a more elaborate technique: it represents all transactions containing in a block as a <a href="https://en.wikipedia.org/wiki/Merkle_tree">Merkle tree</a>
+ and uses the root hash of the tree in the Proof-of-Work system. This 
+approach allows to quickly check if a block contains certain 
+transaction, having only just the root hash and without downloading all 
+the transactions.</p>
+</blockquote>
+<p>Let’s check that everything is correct so far:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go createblockchain -address Ivan
+00000093450837f8b52b78c25f8163bb6137caf43ff4d9a01d1b731fa8ddcc8a
+
+Done<span class="token operator">!</span>
+</code></pre></div><p>Good! We received out first mining reward. But how do we check the balance?</p>
+<h2 id="unspent-transaction-outputs">Unspent Transaction Outputs</h2>
+<p>We need to find all unspent transaction outputs (UTXO). <em>Unspent</em> means that these outputs weren’t referenced in any inputs. On the diagram above, these are:</p>
+<ol>
+<li>tx0, output 1;</li>
+<li>tx1, output 0;</li>
+<li>tx3, output 0;</li>
+<li>tx4, output 0.</li>
+</ol>
+<p>Of course, when we check balance, we don’t need all of them, but only
+ those that can be unlocked by the key we own (currently we don’t have 
+keys implemented and will use user defined addresses instead). First, 
+let’s define locking-unlocking methods on inputs and outputs:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>in <span class="token operator">*</span>TXInput<span class="token punctuation">)</span> <span class="token function">CanUnlockOutputWith</span><span class="token punctuation">(</span>unlockingData <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token builtin">bool</span> <span class="token punctuation">{</span>
+	<span class="token keyword">return</span> in<span class="token punctuation">.</span>ScriptSig <span class="token operator">==</span> unlockingData
+<span class="token punctuation">}</span>
+
+<span class="token keyword">func</span> <span class="token punctuation">(</span>out <span class="token operator">*</span>TXOutput<span class="token punctuation">)</span> <span class="token function">CanBeUnlockedWith</span><span class="token punctuation">(</span>unlockingData <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token builtin">bool</span> <span class="token punctuation">{</span>
+	<span class="token keyword">return</span> out<span class="token punctuation">.</span>ScriptPubKey <span class="token operator">==</span> unlockingData
+<span class="token punctuation">}</span>
+</code></pre></div><p>Here we just compare the script fields with <code>unlockingData</code>. These pieces will be improved in a future article, after we implement addresses based on private keys.</p>
+<p>The next step - finding transactions containing unspent outputs - is quite difficult:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token function">FindUnspentTransactions</span><span class="token punctuation">(</span>address <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>Transaction <span class="token punctuation">{</span>
+  <span class="token keyword">var</span> unspentTXs <span class="token punctuation">[</span><span class="token punctuation">]</span>Transaction
+  spentTXOs <span class="token operator">:=</span> <span class="token function">make</span><span class="token punctuation">(</span><span class="token keyword">map</span><span class="token punctuation">[</span><span class="token builtin">string</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">int</span><span class="token punctuation">)</span>
+  bci <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">Iterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+  <span class="token keyword">for</span> <span class="token punctuation">{</span>
+    block <span class="token operator">:=</span> bci<span class="token punctuation">.</span><span class="token function">Next</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+    <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> tx <span class="token operator">:=</span> <span class="token keyword">range</span> block<span class="token punctuation">.</span>Transactions <span class="token punctuation">{</span>
+      txID <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>tx<span class="token punctuation">.</span>ID<span class="token punctuation">)</span>
+
+    Outputs<span class="token punctuation">:</span>
+      <span class="token keyword">for</span> outIdx<span class="token punctuation">,</span> out <span class="token operator">:=</span> <span class="token keyword">range</span> tx<span class="token punctuation">.</span>Vout <span class="token punctuation">{</span>
+        <span class="token comment">// Was the output spent?</span>
+        <span class="token keyword">if</span> spentTXOs<span class="token punctuation">[</span>txID<span class="token punctuation">]</span> <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+          <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> spentOut <span class="token operator">:=</span> <span class="token keyword">range</span> spentTXOs<span class="token punctuation">[</span>txID<span class="token punctuation">]</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> spentOut <span class="token operator">==</span> outIdx <span class="token punctuation">{</span>
+              <span class="token keyword">continue</span> Outputs
+            <span class="token punctuation">}</span>
+          <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">if</span> out<span class="token punctuation">.</span><span class="token function">CanBeUnlockedWith</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+          unspentTXs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>unspentTXs<span class="token punctuation">,</span> <span class="token operator">*</span>tx<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span>
+
+      <span class="token keyword">if</span> tx<span class="token punctuation">.</span><span class="token function">IsCoinbase</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token boolean">false</span> <span class="token punctuation">{</span>
+        <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> in <span class="token operator">:=</span> <span class="token keyword">range</span> tx<span class="token punctuation">.</span>Vin <span class="token punctuation">{</span>
+          <span class="token keyword">if</span> in<span class="token punctuation">.</span><span class="token function">CanUnlockOutputWith</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            inTxID <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>in<span class="token punctuation">.</span>Txid<span class="token punctuation">)</span>
+            spentTXOs<span class="token punctuation">[</span>inTxID<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>spentTXOs<span class="token punctuation">[</span>inTxID<span class="token punctuation">]</span><span class="token punctuation">,</span> in<span class="token punctuation">.</span>Vout<span class="token punctuation">)</span>
+          <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token function">len</span><span class="token punctuation">(</span>block<span class="token punctuation">.</span>PrevBlockHash<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token punctuation">{</span>
+      <span class="token keyword">break</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+
+  <span class="token keyword">return</span> unspentTXs
+<span class="token punctuation">}</span>
+</code></pre></div><p>Since transactions are stored in blocks, we have to check every block in a blockchain. We start with outputs:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">if</span> out<span class="token punctuation">.</span><span class="token function">CanBeUnlockedWith</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	unspentTXs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>unspentTXs<span class="token punctuation">,</span> tx<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>If an output was locked by the same address we’re 
+searching unspent transaction outputs for, then this is the output we 
+want. But before taking it, we need to check if an output was already 
+referenced in an input:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">if</span> spentTXOs<span class="token punctuation">[</span>txID<span class="token punctuation">]</span> <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+	<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> spentOut <span class="token operator">:=</span> <span class="token keyword">range</span> spentTXOs<span class="token punctuation">[</span>txID<span class="token punctuation">]</span> <span class="token punctuation">{</span>
+		<span class="token keyword">if</span> spentOut <span class="token operator">==</span> outIdx <span class="token punctuation">{</span>
+			<span class="token keyword">continue</span> Outputs
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>We skip those that were referenced in inputs 
+(their values were moved to other outputs, thus we cannot count them). 
+After checking outputs we gather all inputs that could unlock outputs 
+locked with the provided address (this doesn’t apply to coinbase 
+transactions, since they don’t unlock outputs):</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">if</span> tx<span class="token punctuation">.</span><span class="token function">IsCoinbase</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token boolean">false</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> in <span class="token operator">:=</span> <span class="token keyword">range</span> tx<span class="token punctuation">.</span>Vin <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> in<span class="token punctuation">.</span><span class="token function">CanUnlockOutputWith</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            inTxID <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>in<span class="token punctuation">.</span>Txid<span class="token punctuation">)</span>
+            spentTXOs<span class="token punctuation">[</span>inTxID<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>spentTXOs<span class="token punctuation">[</span>inTxID<span class="token punctuation">]</span><span class="token punctuation">,</span> in<span class="token punctuation">.</span>Vout<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>The function returns a list of transactions 
+containing unspent outputs. To calculate balance we need one more 
+function that takes the transactions and returns only outputs:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token function">FindUTXO</span><span class="token punctuation">(</span>address <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>TXOutput <span class="token punctuation">{</span>
+       <span class="token keyword">var</span> UTXOs <span class="token punctuation">[</span><span class="token punctuation">]</span>TXOutput
+       unspentTransactions <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">FindUnspentTransactions</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span>
+
+       <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> tx <span class="token operator">:=</span> <span class="token keyword">range</span> unspentTransactions <span class="token punctuation">{</span>
+               <span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> out <span class="token operator">:=</span> <span class="token keyword">range</span> tx<span class="token punctuation">.</span>Vout <span class="token punctuation">{</span>
+                       <span class="token keyword">if</span> out<span class="token punctuation">.</span><span class="token function">CanBeUnlockedWith</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                               UTXOs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>UTXOs<span class="token punctuation">,</span> out<span class="token punctuation">)</span>
+                       <span class="token punctuation">}</span>
+               <span class="token punctuation">}</span>
+       <span class="token punctuation">}</span>
+
+       <span class="token keyword">return</span> UTXOs
+<span class="token punctuation">}</span>
+</code></pre></div><p>That’s it! Now we can implement <code>getbalance</code> command:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>cli <span class="token operator">*</span>CLI<span class="token punctuation">)</span> <span class="token function">getBalance</span><span class="token punctuation">(</span>address <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	bc <span class="token operator">:=</span> <span class="token function">NewBlockchain</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span>
+	<span class="token keyword">defer</span> bc<span class="token punctuation">.</span>db<span class="token punctuation">.</span><span class="token function">Close</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+	balance <span class="token operator">:=</span> <span class="token number">0</span>
+	UTXOs <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">FindUTXO</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span>
+
+	<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> out <span class="token operator">:=</span> <span class="token keyword">range</span> UTXOs <span class="token punctuation">{</span>
+		balance <span class="token operator">+=</span> out<span class="token punctuation">.</span>Value
+	<span class="token punctuation">}</span>
+
+	fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"Balance of '%s': %d\n"</span><span class="token punctuation">,</span> address<span class="token punctuation">,</span> balance<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>The account balance is the sum of values of all unspent transaction outputs locked by the account address.</p>
+<p>Let’s check our balance after mining the genesis block:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go getbalance -address Ivan
+Balance of <span class="token string">'Ivan'</span><span class="token builtin class-name">:</span> <span class="token number">10</span>
+</code></pre></div><p>This is our first money!</p>
+<h2 id="sending-coins">Sending Coins</h2>
+<p>Now, we want to send some coins to someone else. For this, we need to
+ create a new transaction, put it in a block, and mine the block. So 
+far, we implemented only the coinbase transaction (which is a special 
+type of transactions), now we need a general transaction:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token function">NewUTXOTransaction</span><span class="token punctuation">(</span>from<span class="token punctuation">,</span> to <span class="token builtin">string</span><span class="token punctuation">,</span> amount <span class="token builtin">int</span><span class="token punctuation">,</span> bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token operator">*</span>Transaction <span class="token punctuation">{</span>
+	<span class="token keyword">var</span> inputs <span class="token punctuation">[</span><span class="token punctuation">]</span>TXInput
+	<span class="token keyword">var</span> outputs <span class="token punctuation">[</span><span class="token punctuation">]</span>TXOutput
+
+	acc<span class="token punctuation">,</span> validOutputs <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">FindSpendableOutputs</span><span class="token punctuation">(</span>from<span class="token punctuation">,</span> amount<span class="token punctuation">)</span>
+
+	<span class="token keyword">if</span> acc <span class="token operator">&lt;</span> amount <span class="token punctuation">{</span>
+		log<span class="token punctuation">.</span><span class="token function">Panic</span><span class="token punctuation">(</span><span class="token string">"ERROR: Not enough funds"</span><span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Build a list of inputs</span>
+	<span class="token keyword">for</span> txid<span class="token punctuation">,</span> outs <span class="token operator">:=</span> <span class="token keyword">range</span> validOutputs <span class="token punctuation">{</span>
+		txID<span class="token punctuation">,</span> err <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">DecodeString</span><span class="token punctuation">(</span>txid<span class="token punctuation">)</span>
+
+		<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> out <span class="token operator">:=</span> <span class="token keyword">range</span> outs <span class="token punctuation">{</span>
+			input <span class="token operator">:=</span> TXInput<span class="token punctuation">{</span>txID<span class="token punctuation">,</span> out<span class="token punctuation">,</span> from<span class="token punctuation">}</span>
+			inputs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>inputs<span class="token punctuation">,</span> input<span class="token punctuation">)</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Build a list of outputs</span>
+	outputs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>outputs<span class="token punctuation">,</span> TXOutput<span class="token punctuation">{</span>amount<span class="token punctuation">,</span> to<span class="token punctuation">}</span><span class="token punctuation">)</span>
+	<span class="token keyword">if</span> acc <span class="token operator">&gt;</span> amount <span class="token punctuation">{</span>
+		outputs <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>outputs<span class="token punctuation">,</span> TXOutput<span class="token punctuation">{</span>acc <span class="token operator">-</span> amount<span class="token punctuation">,</span> from<span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token comment">// a change</span>
+	<span class="token punctuation">}</span>
+
+	tx <span class="token operator">:=</span> Transaction<span class="token punctuation">{</span><span class="token boolean">nil</span><span class="token punctuation">,</span> inputs<span class="token punctuation">,</span> outputs<span class="token punctuation">}</span>
+	tx<span class="token punctuation">.</span><span class="token function">SetID</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+	<span class="token keyword">return</span> <span class="token operator">&amp;</span>tx
+<span class="token punctuation">}</span>
+</code></pre></div><p>Before creating new outputs, we first have to find all unspent outputs and ensure that they store enough value. This is what <code>FindSpendableOutputs</code> method does. After that, for each found output an input referencing it is created. Next, we create two outputs:</p>
+<ol>
+<li>One that’s locked with the receiver address. This is the actual transferring of coins to other address.</li>
+<li>One that’s locked with the sender address. This is a change. It’s 
+only created when unspent outputs hold more value than required for the 
+new transaction. Remember: outputs are <strong>indivisible</strong>.</li>
+</ol>
+<p><code>FindSpendableOutputs</code> method is based on the <code>FindUnspentTransactions</code> method we defined earlier:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token function">FindSpendableOutputs</span><span class="token punctuation">(</span>address <span class="token builtin">string</span><span class="token punctuation">,</span> amount <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token builtin">int</span><span class="token punctuation">,</span> <span class="token keyword">map</span><span class="token punctuation">[</span><span class="token builtin">string</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	unspentOutputs <span class="token operator">:=</span> <span class="token function">make</span><span class="token punctuation">(</span><span class="token keyword">map</span><span class="token punctuation">[</span><span class="token builtin">string</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">int</span><span class="token punctuation">)</span>
+	unspentTXs <span class="token operator">:=</span> bc<span class="token punctuation">.</span><span class="token function">FindUnspentTransactions</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span>
+	accumulated <span class="token operator">:=</span> <span class="token number">0</span>
+
+Work<span class="token punctuation">:</span>
+	<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> tx <span class="token operator">:=</span> <span class="token keyword">range</span> unspentTXs <span class="token punctuation">{</span>
+		txID <span class="token operator">:=</span> hex<span class="token punctuation">.</span><span class="token function">EncodeToString</span><span class="token punctuation">(</span>tx<span class="token punctuation">.</span>ID<span class="token punctuation">)</span>
+
+		<span class="token keyword">for</span> outIdx<span class="token punctuation">,</span> out <span class="token operator">:=</span> <span class="token keyword">range</span> tx<span class="token punctuation">.</span>Vout <span class="token punctuation">{</span>
+			<span class="token keyword">if</span> out<span class="token punctuation">.</span><span class="token function">CanBeUnlockedWith</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> accumulated <span class="token operator">&lt;</span> amount <span class="token punctuation">{</span>
+				accumulated <span class="token operator">+=</span> out<span class="token punctuation">.</span>Value
+				unspentOutputs<span class="token punctuation">[</span>txID<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span>unspentOutputs<span class="token punctuation">[</span>txID<span class="token punctuation">]</span><span class="token punctuation">,</span> outIdx<span class="token punctuation">)</span>
+
+				<span class="token keyword">if</span> accumulated <span class="token operator">&gt;=</span> amount <span class="token punctuation">{</span>
+					<span class="token keyword">break</span> Work
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">return</span> accumulated<span class="token punctuation">,</span> unspentOutputs
+<span class="token punctuation">}</span>
+</code></pre></div><p>The method iterates over all unspent transactions 
+and accumulates their values. When the accumulated value is more or 
+equals to the amount we want to transfer, it stops and returns the 
+accumulated value and output indices grouped by transaction IDs. We 
+don’t want to take more than we’re going to spend.</p>
+<p>Now we can modify the <code>Blockchain.MineBlock</code> method:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>bc <span class="token operator">*</span>Blockchain<span class="token punctuation">)</span> <span class="token function">MineBlock</span><span class="token punctuation">(</span>transactions <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Transaction<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token operator">...</span>
+	newBlock <span class="token operator">:=</span> <span class="token function">NewBlock</span><span class="token punctuation">(</span>transactions<span class="token punctuation">,</span> lastHash<span class="token punctuation">)</span>
+	<span class="token operator">...</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Finally, let’s implement <code>send</code> command:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-go"><code class=" language-go" data-lang="go"><span class="token keyword">func</span> <span class="token punctuation">(</span>cli <span class="token operator">*</span>CLI<span class="token punctuation">)</span> <span class="token function">send</span><span class="token punctuation">(</span>from<span class="token punctuation">,</span> to <span class="token builtin">string</span><span class="token punctuation">,</span> amount <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	bc <span class="token operator">:=</span> <span class="token function">NewBlockchain</span><span class="token punctuation">(</span>from<span class="token punctuation">)</span>
+	<span class="token keyword">defer</span> bc<span class="token punctuation">.</span>db<span class="token punctuation">.</span><span class="token function">Close</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+	tx <span class="token operator">:=</span> <span class="token function">NewUTXOTransaction</span><span class="token punctuation">(</span>from<span class="token punctuation">,</span> to<span class="token punctuation">,</span> amount<span class="token punctuation">,</span> bc<span class="token punctuation">)</span>
+	bc<span class="token punctuation">.</span><span class="token function">MineBlock</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">*</span>Transaction<span class="token punctuation">{</span>tx<span class="token punctuation">}</span><span class="token punctuation">)</span>
+	fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"Success!"</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>Sending coins means creating a transaction and 
+adding it to the blockchain via mining a block. But Bitcoin doesn’t do 
+this immediately (as we do). Instead, it puts all new transactions into 
+memory pool (or mempool), and when a miner is ready to mine a block, it 
+takes all transactions from the mempool and creates a candidate block. 
+Transactions become confirmed only when a block containing them is mined
+ and added to the blockchain.</p>
+<p>Let’s check that sending coins works:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go send -from Ivan -to Pedro -amount <span class="token number">6</span>
+00000001b56d60f86f72ab2a59fadb197d767b97d4873732be505e0a65cc1e37
+
+Success<span class="token operator">!</span>
+
+$ blockchain_go getbalance -address Ivan
+Balance of <span class="token string">'Ivan'</span><span class="token builtin class-name">:</span> <span class="token number">4</span>
+
+$ blockchain_go getbalance -address Pedro
+Balance of <span class="token string">'Pedro'</span><span class="token builtin class-name">:</span> <span class="token number">6</span>
+</code></pre></div><p>Nice! Now, let’s create more transactions and ensure that sending from multiple outputs works fine:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go send -from Pedro -to Helen -amount <span class="token number">2</span>
+00000099938725eb2c7730844b3cd40209d46bce2c2af9d87c2b7611fe9d5bdf
+
+Success<span class="token operator">!</span>
+
+$ blockchain_go send -from Ivan -to Helen -amount <span class="token number">2</span>
+000000a2edf94334b1d94f98d22d7e4c973261660397dc7340464f7959a7a9aa
+
+Success<span class="token operator">!</span>
+</code></pre></div><p>Now, Helen’s coins are locked in two outputs: one from Pedro and one from Ivan. Let’s send them to someone else:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go send -from Helen -to Rachel -amount <span class="token number">3</span>
+000000c58136cffa669e767b8f881d16e2ede3974d71df43058baaf8c069f1a0
+
+Success<span class="token operator">!</span>
+
+$ blockchain_go getbalance -address Ivan
+Balance of <span class="token string">'Ivan'</span><span class="token builtin class-name">:</span> <span class="token number">2</span>
+
+$ blockchain_go getbalance -address Pedro
+Balance of <span class="token string">'Pedro'</span><span class="token builtin class-name">:</span> <span class="token number">4</span>
+
+$ blockchain_go getbalance -address Helen
+Balance of <span class="token string">'Helen'</span><span class="token builtin class-name">:</span> <span class="token number">1</span>
+
+$ blockchain_go getbalance -address Rachel
+Balance of <span class="token string">'Rachel'</span><span class="token builtin class-name">:</span> <span class="token number">3</span>
+</code></pre></div><p>Looks fine! Now let’s test a failure:</p>
+<div class="highlight"><pre tabindex="0" class="chroma language-shell"><code class=" language-shell" data-lang="shell">$ blockchain_go send -from Pedro -to Ivan -amount <span class="token number">5</span>
+panic: ERROR: Not enough funds
+
+$ blockchain_go getbalance -address Pedro
+Balance of <span class="token string">'Pedro'</span><span class="token builtin class-name">:</span> <span class="token number">4</span>
+
+$ blockchain_go getbalance -address Ivan
+Balance of <span class="token string">'Ivan'</span><span class="token builtin class-name">:</span> <span class="token number">2</span>
+</code></pre></div><h2 id="conclusion">Conclusion</h2>
+<p>Phew! It wasn’t easy, but we have transactions now! Although, some key features of a Bitcoin-like cryptocurrency are missing:</p>
+<ol>
+<li>Addresses. We don’t have real, private key based addresses yet.</li>
+<li>Rewards. Mining blocks is absolutely not profitable!</li>
+<li>UTXO set. Getting balance requires scanning the whole blockchain, 
+which can take very long time when there are many and many blocks. Also,
+ it can take a lot of time if we want to validate later transactions. 
+UTXO set is intended to solve these problems and make operations with 
+transactions fast.</li>
+<li>Mempool. This is where transactions are stored before being packed 
+in a block. In our current implementation, a block contains only one 
+transaction, and this is quite inefficient.</li>
+</ol>
+<p>Links:</p>
+<ol>
+<li><a href="https://github.com/Jeiwan/blockchain_go/tree/part_4">Full source codes</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Transaction">Transaction</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Protocol_documentation#Merkle_Trees">Merkle tree</a></li>
+<li><a href="https://en.bitcoin.it/wiki/Coinbase">Coinbase</a></li>
+</ol>
+
+
+</article>
+
+<hr>
+<br>
+
+
+
+
+
+
+      <footer class="site-footer">
+        <span itemscope="" itemtype="http://schema.org/Person">
+          <link itemprop="url" href="https://jeiwan.net/">
+
+          Author:
+          <span itemprop="name">Ivan Kuznetsov</span>
+
+          <br>
+
+          Get in touch:
+
+          <a itemprop="sameAs" href="mailto:me@jeiwan.ru" target="_blank">E-mail</a>
+
+          <a itemprop="sameAs" href="https://t.me/jeiwan" title="Telegram" target="_blank">Telegram</a>
+
+          <a itemprop="sameAs" href="https://twitter.com/jeiwan7" title="Twitter" target="_blank">Twitter</a>
+
+          <a itemprop="sameAs" href="https://github.com/jeiwan" title="GitHub" target="_blank">GitHub</a>
+
+          
+        </span>
+
+        <br><br>
+
+        <div style="text-align:center">
+          <small>
+            <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="Building%20Blockchain%20in%20Go.%20Part%204%20Transactions%201%20-%20Going%20the%20distance_files/88x31.png"></a><br>Content of this site is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
+          </small>
+        </div>
+
+        
+      </footer>
+    </div>
+
+  
+
+    <script src="Building%20Blockchain%20in%20Go.%20Part%204%20Transactions%201%20-%20Going%20the%20distance_files/prism.js"></script>
+
+  
+
+</body></html>

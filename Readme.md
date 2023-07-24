@@ -519,9 +519,14 @@ Classic SQL - CRUD
 Database design,  [normalization forms](https://www.guru99.com/database-normalization.html)
 
 You should know how grouping work and doing aggregations.
-You should know the difference between [joins](https://sqlbolt.com/lesson/select_queries_with_joins), outer/left/inner/...and...there is one more new :)
+You should know the difference between joins, outer/left/inner/...and...there is one more new :).
 
+Watch about the joins - https://www.youtube.com/watch?v=Yh4CrPHVBdE
+Read about the joins - https://sqlbolt.com/lesson/select_queries_with_joins
+
+Read about interview SQL questions - https://www.interviewbit.com/sql-joins-interview-questions/
 You could be asked to iterate recursevly on SQL https://learnsql.com/blog/do-it-in-sql-recursive-tree-traversal/
+
 
 ### Learn about Forms
 

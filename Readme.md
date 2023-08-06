@@ -13,6 +13,13 @@
     - [Docker](#docker)
     - [sqlite](#sqlite)
   - [Basic SDLC](#basic-sdlc)
+    - [Methodologies](#methodologies)
+      - [Waterfall](#waterfall)
+      - [When to Apply Scrum](#when-to-apply-scrum)
+      - [When to Apply Kanban](#when-to-apply-kanban)
+    - [Typical company in 2023](#typical-company-in-2023)
+    - [User Stories](#user-stories)
+    - [Softaware Falures](#softaware-falures)
     - [Testing](#testing)
     - [CI/CD process](#cicd-process)
   - [Golang](#golang)
@@ -27,6 +34,7 @@
       - [Simple](#simple)
       - [Practical Concurency](#practical-concurency)
       - [BDD](#bdd)
+      - [Error handling](#error-handling)
     - [Containers](#containers)
       - [Postgresql](#postgresql)
   - [Web development](#web-development)
@@ -250,6 +258,123 @@ if you don't see the docker at your own groups, reboot the machine.
 
 ## Basic SDLC
 
+### Methodologies
+
+Waterfall vs Scrum vs Kanban
+
+When to apply which one?
+
+#### Waterfall
+
+Well-Defined Requirements
+
+When the project has clear, stable, and well-understood requirements that are unlikely to change significantly.
+
+Predictable Processes
+
+When the project follows a linear and sequential process with minimal iterations or changes.
+
+Small Teams or Single Contributors
+
+When the project can be managed effectively by a small team or even a single contributor.
+
+
+#### When to Apply Scrum
+
+Fixed Iterations: Scrum operates in fixed time iterations called sprints, typically 2-4 weeks long. If your team prefers a structured, time-boxed approach with regular releases, Scrum might be a better choice.
+
+Predictable Workload: When the workload is relatively predictable and can be planned in advance, Scrum provides a clear framework for setting sprint goals and achieving them.
+
+Cross-Functional Teams: Scrum promotes cross-functional teams that work together to deliver a potentially shippable product increment in each sprint. This approach is beneficial when different skill sets are required for the work.
+
+Collaboration and Feedback: Scrum places a strong emphasis on collaboration and continuous feedback through ceremonies like daily stand-ups, sprint planning, review, and retrospective meetings.
+
+Adaptive Planning: If your team needs to respond to changing requirements and adapt quickly, but you still want the structure of fixed iterations, Scrum's iterative approach can be helpful.
+
+#### When to Apply Kanban
+
+Continuous Flow: Kanban is well-suited for projects with a continuous and unpredictable flow of work. If your work items come in sporadically and need to be addressed quickly, Kanban can help manage this variability.
+
+No Fixed Iterations: Kanban doesn't have fixed time iterations like Scrum does. It's more flexible in terms of when work items are completed and released. This makes it suitable for projects with frequent releases or where rapid response to changing requirements is critical.
+
+Visualizing Workflow: Kanban heavily emphasizes visualizing the workflow, making it easier to identify bottlenecks, track progress, and optimize the process.
+
+Steady State: If your team or organization is already operating in a relatively stable state and you want to focus on improving efficiency, Kanban can be a good fit.
+
+Limited Process Change: Kanban is often chosen when the team is resistant to significant process changes, as it allows for gradual improvements over time.
+
+Metrics used in Kanban
+
+- Lead Time: The time taken for a work item to move from the "To Do" column to the "Done" column. It measures the overall time a task spends in the system and can help identify delays and areas for improvement.
+- Cycle Time: Similar to lead time, cycle time measures the time it takes for a work item to be actively worked on (from "In Progress" to "Done"). It focuses on the time spent in the active phases of the workflow.
+- Throughput: The number of work items completed within a specific time frame (e.g., per week or per sprint). It provides an indication of the team's capacity and productivity.
+- WIP (Work in Progress) Limits Adherence: Measure how often the team stays within the predefined WIP limits for each stage of the workflow. Adhering to WIP limits helps maintain a steady flow and avoid overburdening the team.
+- Blocked Work Items: Track the number of work items that are blocked and unable to progress due to dependencies, external factors, or other reasons. Monitoring blockage can help address bottlenecks and improve flow.
+- Cumulative Flow Diagram (CFD): Similar to Scrum, a CFD visualizes the flow of work items through different stages of the process over time. It can highlight trends, bottlenecks, and areas of concern.
+- Escaped Work Items: Measure the number of work items that were completed but later returned as defects or issues. This can provide insights into the quality of the work being delivered.
+- Lead Time Distribution: Analyze the distribution of lead times to identify patterns and outliers. This can help set more accurate expectations and improve planning.
+- Time-to-Market: Measure the time it takes for a work item to go from concept or request to being delivered to customers or stakeholders. This metric focuses on delivering value quickly.
+- Customer Satisfaction: Gather feedback from customers or stakeholders on the delivered work. This can include both quantitative surveys and qualitative feedback to assess the quality and value of the output.
+- Flow Efficiency: Calculate the percentage of time that a work item is actively being worked on (cycle time) versus the total time it spends in the system (lead time). Higher flow efficiency indicates smoother and more efficient processes.
+- Backlog Aging: Monitor the age of items in the backlog to ensure that old, low-priority items do not accumulate and hinder the team's focus on current priorities.
+
+### Typical company in 2023
+
+Roles:
+
+- Product Owner: Represents the stakeholders and defines the product backlog, which is the prioritized list of features, enhancements, and fixes.
+- Scrum Master: Facilitates the Scrum process, removes impediments, and ensures the team follows Scrum practices.
+- Development Team: Cross-functional group responsible for delivering potentially shippable increments of the product during each sprint.
+
+Artifacts:
+
+- Product Backlog: A dynamic and ordered list of work items (user stories, features, tasks) that need to be completed for the product. It's continuously refined and reprioritized by the Product Owner.
+- Sprint Backlog: The set of product backlog items selected for the current sprint, along with a plan for how the team will achieve them.
+- Increment: The sum of all completed product backlog items at the end of each sprint, which should be in a potentially shippable state.
+
+Events:
+
+- Sprint: A time-boxed period (usually 2-4 weeks) during which the team works on the items from the sprint backlog to deliver a potentially shippable product increment.
+- Sprint Planning: A meeting where the team and Product Owner collaborate to select and plan the work to be done in the upcoming sprint.
+- Daily Scrum (Daily Standup): A short daily meeting where team members share their progress, discuss impediments, and plan their work for the day.
+- Sprint Review: A meeting held at the end of each sprint to demonstrate the completed work to stakeholders and gather feedback.
+- Sprint Retrospective: A meeting where the team reflects on their processes and identifies improvements for the next sprint.
+
+Principles:
+
+- Empirical Process Control: Scrum is built on transparency, inspection, and adaptation. It encourages frequent inspection and adaptation of the process to improve predictability and product quality.
+- Self-Organization: Teams are self-organizing and cross-functional, enabling them to make decisions and adapt to changes without constant direction.
+- Collaboration: Scrum emphasizes collaboration between the Product Owner, Scrum Master, and Development Team, as well as active engagement with stakeholders.
+
+The Scrum process focuses on delivering value early and often, allowing teams to respond to changing requirements and priorities. It provides a framework that encourages communication, teamwork, and continuous improvement throughout the development lifecycle.
+
+Metrics:
+
+- Velocity: The sum of story points (or other units of estimation) completed by the team in a sprint. Velocity provides a basis for forecasting how much work the team can complete in future sprints.
+- Burndown Chart: A visual representation of the remaining work (usually in story points) over the course of a sprint. It helps the team track progress and identify if they are on track to complete the planned work.
+- Cumulative Flow Diagram: This chart shows the flow of work items through various stages over time. It helps visualize bottlenecks and work in progress (WIP) limits, highlighting areas that might need attention.
+- Lead Time and Cycle Time: Lead time is the time taken from the moment a work item is added to the backlog until it's completed. Cycle time is the time taken from when work begins on an item until it's completed. These metrics help analyze the efficiency of the development process.
+- Sprint Goal Success Rate: Measure how often the sprint goals are met or not met. This provides insights into the team's ability to set achievable goals and deliver on them.
+- Sprint Review and Retrospective Feedback: Collect qualitative feedback from stakeholders during sprint reviews and from the team during retrospectives. Use this feedback to identify improvements and areas of concern.
+- Escaped Defects: Track the number of defects or issues that are identified after the product has been released to production. This metric helps gauge the quality of the delivered work.
+- Team Happiness or Satisfaction: Use surveys or informal methods to gauge the team's satisfaction, engagement, and morale. A motivated team tends to be more productive and effective.
+- Code Quality Metrics: Track code-related metrics like code coverage, code complexity, and technical debt. These metrics help ensure the maintainability and stability of the codebase.
+- Backlog Health: Assess the state of the product backlog, including its size, prioritization, and clarity. An unhealthy backlog can lead to inefficiencies and confusion.
+
+### User Stories
+
+
+Definition: A user story is a small, self-contained unit of development work designed to accomplish a specific goal within a product. A user story is usually written from the user’s perspective and follows the format: “As [a user persona], I want [to perform this action] so that [I can accomplish this goal].”
+
+Read more on [user stories and use cases](https://www.productplan.com/glossary/user-story/)
+
+As a developer you are responsible to start working only on a well defined user stories. If something is not clear you should rise hand and initiate discussion with your PM or team.
+
+
+### Softaware Falures
+
+
+
 ### Testing
 
 ### CI/CD process
@@ -463,6 +588,13 @@ Make it working in Github Actions - your CI/CD server.
 
 From now on, put your projects in CI/CD
 
+
+#### Error handling
+
+When we have errors in the applications we need to store, and analyse them.
+An self-hosted popular solution could be found is [sentry](https://develop.sentry.dev/self-hosted/), another one is errbit which is based on the comesial [airbrake.io](https://www.airbrake.io/)
+
+
 ### Containers
 
 Explain cgroups, containers, images and image repositories.
@@ -594,3 +726,5 @@ Linux course
 Learn security https://tryhackme.com/dashboard
 
 [Learn Projects by example](https://github.com/practical-tutorials/project-based-learning#go)
+
+- payed courses http://pragmatic.bg/courses/software-testing-course/

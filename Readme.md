@@ -661,6 +661,10 @@ You could be asked to iterate recursevly on SQL https://learnsql.com/blog/do-it-
 
 
 ### Learn about Forms
+We have to know basic HTML knowedge. When to use what element.
+It is important to know [the semantics](https://web.dev/learn/html/semantic-html/) of each element.
+Nice walktrough [all emenents](https://www.patrickweaver.net/blog/a-blog-post-with-every-html-element/).
+
 
 Build Web Application with Golang
 
